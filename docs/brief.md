@@ -720,7 +720,20 @@ materialized datasets, and rendering surfaces without transiting the model.
   dataset, recompiling under each reader's scope. They disclose nothing a
   reader's own scope doesn't allow, so they need no ceremony — but they are
   computation, not products.
-- **Materialized datasets** are the products. `materialize_dataset(query |
+- **Declared datasets** cover data that exists in no backend yet.
+  `create_dataset(name, description, fields)` lets an agent register a
+  brand-new dataset — a research table, a lead list, a tracker — by
+  declaring typed fields from the closed kind system (plus optional
+  embedding on text fields and optional edges to existing catalog datasets
+  it may read). The runtime validates the schema exactly as it validates a
+  query: kinds from the closed set only, field policies defaulting
+  conservative, description mandatory (an undescribed dataset is one no
+  other agent can ever use). The owner tuple is stamped from the creating
+  scope (§3.7 rule 1); the dataset starts in `draft` lifecycle under the
+  creator's quota; schema evolution is additive and versioned. From that
+  moment it is an ordinary catalog dataset: `put_records` fills it,
+  every query mode reads it, artifacts render it, publication shares it.
+- **Materialized datasets** are the products of queries. `materialize_dataset(query |
   executionReceipt, name)` runs server-side and freezes the result as a
   first-class, versioned dataset — rows flow from backend to storage with
   the model holding only the receipt and the new dataset's name and schema.
