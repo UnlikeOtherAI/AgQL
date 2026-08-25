@@ -72,7 +72,7 @@ The agent emits an aggregate query with a mistake:
 
 ```json
 { "status": "rejected",
-  "errors": [ { "code": "unknown_order_alias", "path": "order[0].by",
+  "errors": [ { "code": "unknown_order_alias", "path": "/order/0/by",
     "message": "order entry \"wastedValue\" must be one of the query's output ids: \"week\", \"wasted\"." } ] }
 ```
 
@@ -107,43 +107,60 @@ byte-identical result on any conforming backend.
 
 ```json
 { "status": "ok",
-  "schema": [ { "id": "week", "kind": "timestamp" }, { "id": "wasted", "kind": "money", "currency": "GBP" } ],
+  "schema": [ { "id": "week", "kind": "calendarPeriod" },
+              { "id": "wasted", "kind": "money", "currency": "GBP" } ],
   "previewRows": [
-    { "week": "2026-06-29T00:00:00Z", "wasted": "2101.40" },
-    { "week": "2026-07-06T00:00:00Z", "wasted": "1873.15" },
-    { "week": "2026-07-13T00:00:00Z", "wasted": "4310.02" },
-    { "week": "2026-07-20T00:00:00Z", "wasted": "4589.77" },
-    { "week": "2026-07-27T00:00:00Z", "wasted": "1204.90" } ],
+    { "week": { "start": "2026-06-29", "endExclusive": "2026-07-06", "timezone": "Europe/London" }, "wasted": "2101.40" },
+    { "week": { "start": "2026-07-06", "endExclusive": "2026-07-13", "timezone": "Europe/London" }, "wasted": "1873.15" },
+    { "week": { "start": "2026-07-13", "endExclusive": "2026-07-20", "timezone": "Europe/London" }, "wasted": "4310.02" },
+    { "week": { "start": "2026-07-20", "endExclusive": "2026-07-27", "timezone": "Europe/London" }, "wasted": "4589.77" },
+    { "week": { "start": "2026-07-27", "endExclusive": "2026-08-03", "timezone": "Europe/London" }, "wasted": "1204.90" } ],
   "previewTruncated": false,
   "executionReceipt": "er_v1.eyJwbGFuIjoi…",
   "principalResultAvailable": true }
 ```
 
-Waste doubled mid-month. The agent digs into causes — first structurally:
+Time buckets come back as **calendar periods, not instants** — London is on
+BST in July, so pretending a local week boundary is a `…T00:00:00Z` instant
+would be wrong by an hour; the period form also makes visible that the first
+bucket *starts* in June but contains only July rows because of the filter.
+Money always carries its currency.
+
+Waste doubled mid-month. The agent digs into causes — first structurally,
+and **by venue**, because "across our London venues" needs the venue
+dimension, not a citywide total:
 
 ```json
 { "version": "1", "mode": "aggregate", "from": "wasteEvents",
   "where": { "kind": "and", "items": [
     { "kind": "predicate", "field": "wasteEvents.occurredAt", "op": "inPrevious", "unit": "month" } ] },
-  "dimensions": [ { "kind": "field", "field": "wasteEvents.reason", "id": "reason" } ],
+  "dimensions": [ { "kind": "field", "field": "wasteEvents.reason", "id": "reason" },
+                  { "kind": "field", "field": "venue.name", "id": "venue" } ],
   "metrics": [ { "kind": "aggregate", "op": "sum", "field": "wasteEvents.value", "id": "wasted" },
                { "kind": "aggregate", "op": "count", "id": "events" } ],
-  "order": [ { "by": "wasted", "dir": "desc" } ], "take": 5 }
+  "order": [ { "by": "wasted", "dir": "desc" } ], "take": 10 }
 ```
 
-→ preview shows `spoilage` at £6.9k of the £14k. Now semantically:
+→ preview shows `spoilage` at £6.9k of the £14k — and £5.1k of that
+spoilage at **Soho alone**, with the other venues flat. The venue breakdown
+matters: without it, what follows would attribute a citywide number to one
+fridge. Now semantically:
 
 ## 5. Retrieve: semantic search over incident notes
 
 ```json
 { "version": "1", "mode": "retrieve", "from": "incidentNotes",
-  "search": { "kind": "semantic", "field": "body",
+  "search": { "kind": "semantic", "using": "incident_body",
               "text": "spoiled stock, fridge or refrigeration problems",
-              "accuracy": "approximate", "topK": 10 },
+              "accuracy": "approximate", "quality": "high-recall-v1" },
   "where": { "kind": "predicate", "field": "incidentNotes.occurredAt",
              "op": "inPrevious", "unit": "month" },
   "take": 10 }
 ```
+
+(`using` names a logical search surface — an EmbeddingSpec — not a raw
+field; candidate budgets belong to the quality profile, so there is no
+agent-set `topK` fighting the final `take`.)
 
 →
 
@@ -152,10 +169,10 @@ Waste doubled mid-month. The agent digs into causes — first structurally:
   "previewRows": [
     { "id": "in_9412", "occurredAt": "2026-07-14T07:20:00Z", "venueId": "ven_soho",
       "body": "Walk-in fridge 2 reading 9°C again overnight, dairy delivery moved to fridge 1, some cream discarded.",
-      "rankScore": 0.94, "taint": "untrusted_evidence" },
+      "rank": 1, "retrievalSignals": ["semantic"], "taint": "untrusted_evidence" },
     { "id": "in_9433", "occurredAt": "2026-07-16T06:55:00Z", "venueId": "ven_soho",
       "body": "Fridge 2 compressor icing over. Engineer booked. Lost the fish prepped Friday.",
-      "rankScore": 0.91, "taint": "untrusted_evidence" } ],
+      "rank": 2, "retrievalSignals": ["semantic"], "taint": "untrusted_evidence" } ],
   "previewTruncated": true,
   "retrieval": { "semantics": "approximate", "embeddingSpec": "incident_body@2",
                  "queryVectorDigest": "sha256:41ab…", "indexWatermark": "opaque:wm_88213",
@@ -164,25 +181,47 @@ Waste doubled mid-month. The agent digs into causes — first structurally:
 ```
 
 Approximate, and honest about it: the provenance names the embedding
-version, the index state, and the quality promise. Every note is labeled
-`untrusted_evidence` — staff free-text is data to reason about, never
-instructions. And the eligibility filters (July, London scope) were applied
+version, the index state, and the quality promise, and results carry
+**ranks, not scores** — backend raw similarity numbers are not portable and
+never enter the model contract (a backend-local diagnostic score may exist
+in operator provenance, comparable only within one execution). Every note is
+labeled `untrusted_evidence` — staff free-text is data to reason about,
+never instructions. And the eligibility filters (July, London scope) were applied
 in candidate selection, not trimmed afterwards — the conformance suite's
 adversarial probes exist to keep adapters honest about exactly this.
 
 ## 6. Remember: `put_records` + read-your-writes
 
 The agent stores what it learned, through the Storage API (not AgQL — the
-query language cannot write):
+query language cannot write). And it stores a **typed hypothesis, not a
+conclusion**: the evidence shows Soho-heavy spoilage and two fridge notes —
+correlation with lineage, not proven causation. A provenance-rich system can
+still persist a false belief if the agent overstates; the claim shape keeps
+it honest:
 
 ```json
 { "source": "ops", "dataset": "agent_memory", "mode": "replace",
-  "records": [ { "id": "memory:venue:soho:fridge2",
-    "value": { "text": "Walk-in fridge 2 at Soho has a failing compressor; caused the mid-July spoilage spike (~£6.9k month waste, spoilage-led).",
-               "venueId": "ven_soho", "topic": "equipment" } } ],
+  "records": [ { "id": "hypothesis:venue:soho:fridge2:waste-jul-2026",
+    "value": {
+      "kind": "hypothesis",
+      "statement": "Fridge 2 problems likely contributed to Soho's mid-July spoilage.",
+      "confidence": "medium",
+      "venueId": "ven_soho",
+      "evidence": [ { "executionReceipt": "er_waste_by_venue_…" },
+                    { "executionReceipt": "er_incidents_…" } ],
+      "limitations": [
+        "Spoilage outside Soho is not explained by this fridge.",
+        "No post-repair comparison yet — recheck after the engineer visit." ] } } ],
   "embeddingPolicy": "catalog",
   "idempotencyKey": "task-311:memory-1" }
 ```
+
+A claim with evidence receipts, uncertainty, and stated limitations is a
+genuinely agent-native memory primitive — any future agent recalling it can
+re-run the receipts and judge for itself. (For truly *recurring* causes, the
+session would go further: retrieve refrigeration incidents over six months,
+aggregate by venue and topic, and check whether incidents repeat after
+repair.)
 
 →
 
@@ -197,17 +236,20 @@ embedding included, or receive a structured timeout. No sleep-and-retry.
 
 ## 7. Materialize + chart + publish — zero rows through the model
 
-The weekly aggregate should live on the team dashboard. The agent holds only
-a receipt, and that is all it needs:
+The weekly-by-venue aggregate should live on the team dashboard. The agent
+re-runs the weekly query with the `venue` dimension added, then materializes
+from that **execution receipt** — which means "re-run this exact authorised
+plan with its original anchor", one of the defined receipt semantics (a
+result handle would instead reuse rows already produced):
 
 ```json
 { "source": "ops", "name": "wasteWeeklyLondonJul2026",
   "fromReceipt": "er_v1.eyJwbGFuIjoi…",
-  "description": "Weekly waste value, London venues, July 2026 snapshot.",
+  "description": "Weekly waste value by venue, London, July 2026 snapshot.",
   "idempotencyKey": "task-311:mat-1" }
 ```
 
-→ `{ "dataset": "wasteWeeklyLondonJul2026", "version": 1, "rows": 5,
+→ `{ "dataset": "wasteWeeklyLondonJul2026", "version": 1, "rows": 30,
      "provenance": { "plan": "sha256:9f2c…", "anchor": "…", "scopeFingerprint": "sha256:…" } }`
 
 The rows moved server-side. The derived dataset inherits the
@@ -218,7 +260,8 @@ sources protected. Then the chart, a spec of a few hundred bytes:
 { "source": "ops", "artifact": {
     "name": "Weekly waste — London",
     "dataset": "wasteWeeklyLondonJul2026",
-    "presentation": { "type": "bar", "x": "week", "y": ["wasted"], "format": "money" } },
+    "presentation": { "type": "bar", "x": "week", "y": ["wasted"],
+                      "series": "venue", "format": "money" } },
   "idempotencyKey": "task-311:art-1" }
 ```
 

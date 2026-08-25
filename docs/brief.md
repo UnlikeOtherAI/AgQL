@@ -12,9 +12,20 @@ contract between them look like?*
 
 The whole idea in one line:
 
-> **One governed, MCP-native contract for agents: store records, retrieve them
-> structurally or semantically, and get the same security, meaning, and
-> provenance across every supported backend.**
+> **AgQL is a vendor-neutral data contract for AI agents. Its closed query
+> IR, governed ingestion protocol, and conformance profiles give structured
+> queries and semantic retrieval the same authorization, freshness,
+> provenance, and release semantics across supported backends.**
+
+The name covers a family of surfaces, distinguished up front because they
+carry different guarantees:
+
+```
+AgQL Query Core     read-only, closed, bounded query IR
+AgQL Ingest         idempotent record ingestion + derived-index visibility receipts
+AgQL Runtime        catalog, policy, planning, adapters, audit, result channels
+AgQL MCP Profile    the normative agent-facing protocol binding
+```
 
 Three pillars are the spine of the design:
 
@@ -26,10 +37,14 @@ Three pillars are the spine of the design:
    measured quality envelopes, and full provenance, never a false promise of
    identical neighbours (§3.5). Naming which guarantee applies, per query, is
    itself part of the contract.
-2. **Fully MCP-enabled.** MCP is *the* access path. Agents reach data entirely
-   through the AgQL MCP surface — tools for the query loop, resources for the
-   catalog — and that surface is core language design (§3.11), not an
-   integration bolted on later.
+2. **Fully MCP-enabled.** MCP is the **normative agent-facing profile**:
+   agents reach data through the AgQL MCP surface — tools for the query loop,
+   resources for the catalog — and that surface is core language design
+   (§3.11), not an integration bolted on later. The core itself is
+   transport-independent: an equivalent HTTP/JSON data-plane profile serves
+   hot paths, browsers, and SDKs, and an embedded profile serves in-process
+   use — all exposing one contract, so "fully MCP-enabled" never has to mean
+   "MCP is the only wire".
 3. **Database-agnostic.** AgQL is defined against a **logical data model**, not
    against any backend's language. A per-backend **adapter** compiles AgQL to
    native queries — relational (Postgres, MySQL, SQLite), document, graph,
@@ -37,15 +52,17 @@ Three pillars are the spine of the design:
    conformance suite, not by marketing (§3.8). The honest phrasing: *any
    backend with a conforming adapter becomes agent-accessible.*
 
-And one deliberate split that protects the strongest safety property: AgQL has
-**two contracts, not one**. The **Query Core** is read-only and incapable of
-writes by construction. The **Agent Storage API** (§3.9) is a separate, tiny,
-idempotent ingestion contract — because agents do need to remember things, but
-"easy storage" must never mean an update language inside the query language.
+And one deliberate split that protects the strongest safety property: the
+**Query Core** is read-only and incapable of writes by construction, while
+**AgQL Ingest** (§3.9) is a separate, tiny, idempotent contract — because
+agents do need to remember things, but "easy storage" must never mean an
+update language inside the query language.
 
-AgQL is not a wrapper around SQL, and it is not another database. It targets
-native engines the way TypeScript targets JavaScript: nothing reaches the
-target except through the compiler, so the target's footguns stay out of reach.
+AgQL is not a wrapper around SQL, and it is **not a storage engine — it is
+the contract under which existing and future storage engines become safely
+interchangeable for agents**. It targets native engines the way TypeScript
+targets JavaScript: nothing reaches the target except through the compiler,
+so the target's footguns stay out of reach.
 
 ---
 
@@ -119,8 +136,9 @@ enormous undocumented namespace. Curated vocabularies attack exactly that.
 1. **Deterministic in declared tiers** — one meaning, one validation outcome;
    reference-identical results where exact, specified quality envelopes where
    approximate, and every answer labeled with which it is.
-2. **Model-emittable** — structured output against a schema, so syntactic
-   validity is guaranteed at the sampling layer, not hoped for.
+2. **Model-emittable** — structured output against a schema: hosts that
+   support schema-constrained generation eliminate structural emission
+   errors before execution, and the server validates every input regardless.
 3. **Safe by construction** — no syntax for the dangerous thing; every model
    string is matched against a closed vocabulary or bound as a parameter; the
    query language has no writes.
@@ -315,11 +333,21 @@ records, vectors, MCP, prompts, and traces. Between them, the easy novelty
 claims are all taken: *another* semantic layer, *another* vector database,
 *another* MCP façade over a single store, *another* text-to-SQL improver.
 
-What none of them ships is the **contract**: a portable execution
-specification that says exactly what an authorised agent may ask, how exact
-and approximate retrieval compose under one scope model, what freshness and
-embedding version an answer represents, what each channel may be shown, and
-what every backend adapter must prove. Semantic-model *syntax* should be
+And the ground keeps moving: entire products now market **agent-memory
+databases** and "databases for AI agents" bundling provenance-attached
+facts, temporal belief history, supersession and decay, hybrid retrieval,
+retrieval traces, isolated per-agent contexts, hierarchical scopes with
+bounded delegation, and MCP access — on top of the vector stores' named
+multi-vectors, documented embedding migrations, and consistency-level
+primitives. Nearly every individual *feature* in this brief is occupied
+territory somewhere.
+
+What none of them ships — because each is tied to its own engine and data
+model — is the **contract**: a portable execution specification that says
+exactly what an authorised agent may ask, how exact and approximate
+retrieval compose under one scope model, what freshness and embedding
+version an answer represents, what each channel may be shown, and what
+every independently implemented backend adapter must prove. Semantic-model *syntax* should be
 imported, not reinvented — the catalog can consume existing semantic models
 where they exist — but AgQL's catalog is more than semantics: it is the
 security object (row scopes, capability tags, field policies, embedding
@@ -331,28 +359,39 @@ project should occupy.
 
 ## 3. Design proposal
 
-### 3.1 Two contracts
+### 3.1 The contract surfaces
 
 ```
-AgQL Query Core          read-only · deterministic where exact ·
-                         explicitly approximate where retrieval says so
-
-Agent Storage API        idempotent put/delete · typed · scope-controlled ·
-                         no update language · catalog-governed embedding
+AgQL Query Core            read-only · deterministic where exact ·
+                           explicitly approximate where retrieval says so
+AgQL Ingest                idempotent put/delete · typed · scope-controlled ·
+                           no update language · named visibility receipts
+Result & Release Protocol  model previews · principal results · receipts ·
+                           host conformance (§3.11)
+Conformance Profiles       engine · adapter (exact + retrieval) · host
+Transport Profiles         MCP (normative agent profile) · HTTP/JSON hot
+                           path · embedded
 ```
 
-The Query Core cannot write; the Storage API cannot query. Nothing that
+Together these form the **AgQL Runtime Contract**. The load-bearing split is
+unchanged: the Query Core cannot write; Ingest cannot query. Nothing that
 compiles in the query language can change anything — that sentence stays true
-forever, and the storage contract is kept too small to grow into its own
-attack surface.
+forever, and the ingestion contract is kept too small to grow into its own
+attack surface. Everything in §3.10 (derived datasets, artifacts,
+publication) is a **runtime extension** above this core: valuable, specified,
+but not required to prove the central thesis, and deferred from the first
+normative release (§5.2).
 
 ### 3.2 Representation: structured JSON core, textual projection later
 
 **Canonical form: a JSON document validated by a published JSON Schema.** Not
-a textual DSL. JSON-under-schema gets constrained decoding and tool-call
-guarantees from every provider — over MCP, the tool input schema *is* the
-language schema, so syntactic validity is enforced at the sampling layer and
-the error budget is spent entirely on semantics. Validation is portable pure
+a textual DSL. JSON-under-schema is what today's providers can constrain
+generation against — over MCP, the tool input schema *is* the language
+schema, so a host that supports schema-constrained generation eliminates
+structural emission errors before execution, and the server validates every
+input regardless (the MCP spec publishes schemas but does not oblige clients
+to decode against them). The error budget then goes almost entirely to
+semantics, where the repair loop earns its keep. Validation is portable pure
 code; queries are data (hashable, diffable, storable, generatable); and
 determinism needs a canonical byte form, which a structured document gives
 cheaply. The verbosity cost is real and paid deliberately: a terse vocabulary,
@@ -373,13 +412,27 @@ catalog declares:
 - **Datasets** — named, described logical relations; backed by a table, a
   collection, a label, a key range, or a named AgQL query — the query cannot
   tell and must not care.
-- **Fields** — closed kind system (`id`, `text`, `integer`, `number`,
-  `money`, `boolean`, `timestamp`, `enum`), descriptions, and **operation-
-  level policies** (§3.7) instead of a boolean "sensitive".
+- **Fields** — a closed kind system rich enough to carry the determinism
+  claim: `id`, `text`, `boolean`, `enum` (code vs display label
+  distinguished), `integer`, `decimal(precision, scale)`,
+  `money(currency, scale)` (currency is part of the type — same-currency
+  values sum, mixed currencies refuse without an explicit conversion
+  definition), `date`, `instant` (UTC point), `localDateTime` (wall-clock,
+  zone-contextual), and `duration`. Binary `float` is excluded from the
+  exact core. Every field additionally declares nullability, and text
+  fields a Unicode normalization + collation version — because "same
+  result on every backend" dies quietly in exactly these corners.
+  Descriptions are mandatory, and **operation-level policies** (§3.7)
+  replace any boolean "sensitive".
 - **Edges** — named relationships with direction, join type, and
-  **cardinality** (`one`|`many`), so fan-out double-counting is rejected or
-  auto-corrected at compile time instead of returning numbers that are wrong
-  but look right.
+  **cardinality** (`one`|`many`) — and, with it, the grain machinery
+  cardinality alone cannot supply: dataset grain, unique keys, and per-
+  measure **additivity** declarations. The rule is conservative by design:
+  **cross-grain aggregation is rejected unless the measure declares a
+  proven fan-out-safe rewrite or explicit allocation semantics** — there is
+  no universal "correct" answer to order revenue grouped by line item, so
+  the compiler never guesses one. Rejection with a repairable message beats
+  a number that is wrong but looks right.
 - **Measures** — governed named aggregations ("revenue = sum of net line
   totals excluding canceled"), the paved road past schema linking.
 - **Default filters** — with descriptions and an explicit, visible opt-out
@@ -421,7 +474,9 @@ pattern matching, never regex) and the relative-time family (`inLast`,
 `inCurrent`, `inPrevious` — calendar math is the compiler's, timezone- and
 fiscal-day-aware); `all`/`any`/`not` trees capped at depth 2; timeline
 buckets vs profile folds as distinct named constructs; aggregates
-(count/countDistinct/sum/avg/min/max/bounded percentile) with per-aggregate
+(count/countDistinct/sum/avg/min/max — percentile is deliberately *out* of
+the v1 exact core, because exact-percentile algorithms and interpolation
+differ across engines in ways that break golden conformance) with per-aggregate
 filters and the ratio composite (zero denominator → null); single-level
 aggregate arithmetic (`add`, `subtract`, `multiply`, `negate`, `coalesce`,
 `minutesBetween`) — deliberately not an expression tree; `having` reusing the
@@ -475,7 +530,16 @@ was served under.
 **Always, for every query, on every backend:**
 
 - *Structural determinism* — canonical serialization (defined key order,
-  defaults materialized), so equal meaning ⇔ equal canonical hash.
+  defaults materialized) and therefore a canonical hash. The implication
+  runs **one way**: equal canonical forms guarantee identical semantics;
+  unequal forms may still be semantically equivalent (`A and B` vs
+  `B and A`) — the spec does not attempt semantic-equivalence
+  normalization. Three identities, three purposes: `sourceQueryHash` (what
+  was asked), `effectivePlanHash` (what was authorised and compiled), and
+  an `executionFingerprint` binding language + catalog + policy + binding +
+  engine + adapter versions, scope fingerprint, anchor,
+  snapshot/watermark, embedding spec, and channel policy — the cache and
+  replay key.
 - *Semantic determinism* — one spec-defined meaning per construct: null
   handling and ordering, fixed-point money (never floats), integer vs decimal
   division, a specified Unicode collation, week start, timezone and
@@ -483,8 +547,9 @@ was served under.
 - *Validation determinism* — specified error ordering: all structural errors,
   then the first semantic error in document order; same invalid query, same
   error code, everywhere.
-- *Compilation determinism* — (query, catalog version, scope, adapter
-  version) → byte-identical native plan; no clocks, no randomness.
+- *Compilation determinism* — (query, catalog version, policy version,
+  scope, binding version, engine version, adapter version) →
+  byte-identical native plan; no clocks, no randomness.
 - *Authorisation determinism* — scope enforcement is exact and identical
   across backends, including in every approximate path.
 - *Anchored time* — relative-time operators never read the clock; every
@@ -494,9 +559,15 @@ was served under.
 **The Exact Core** (structured queries; `accuracy:"exact"` retrieval): full
 result determinism. The engine extends any ordering to a total order with
 defined tie-breakers, so `take` and pagination are reproducible; adapters
-must reproduce golden results **byte-identically** or they do not ship. Exact
-vector search additionally specifies metric, tie-break, and a numeric score
-tolerance.
+must reproduce golden results **byte-identically** or they do not ship.
+**Exact vector search** is defined as *deterministic membership and order* —
+same eligible records, same top-k membership, same specified tie-break order
+— while raw distance values may vary within a stated numeric tolerance and
+are therefore not part of the byte-identical surface (mixing the two
+guarantees was a contradiction; membership-and-order is the promise). Exact
+retrieval is also a **capability with an admission limit**: an adapter may
+declare a maximum eligible-set size for exact scan and answer a structured
+cost refusal beyond it, rather than pretending exact is always affordable.
 
 **The Retrieval Profile** (`accuracy:"approximate"`, hybrid, reranked):
 explicitly approximate, with conformance redefined — *never* identical
@@ -516,6 +587,16 @@ candidate sets across adapters, but instead, all of:
 honored) · `bounded` · `best-effort`. Claims are never silently weakened; a
 query may *require* a tier and receive a structured refusal if the backend
 cannot provide it.
+
+**Replay tiers** complete the honesty: an approximate answer is always
+*auditable* (the provenance envelope reconstructs the data, policy,
+embedding, and index state the answer claims), usually *re-evaluable* (the
+same logical retrieval can be run again over current or pinned data), and
+*exactly replayable* only where the delivered tier says so — a preserved
+index snapshot, a persisted result set, or exact-search re-execution over a
+pinned eligible set. ANN topology drifts under compaction and concurrency;
+the spec never implies that a logged query vector plus a watermark can
+resurrect the identical candidate walk.
 
 This split is a feature, not a concession: it is what lets one contract span
 a warehouse aggregate and an ANN lookup without lying about either.
@@ -741,30 +822,48 @@ A separate, deliberately tiny contract — not part of AgQL:
 }
 ```
 
-- **Modes are explicit and few**: `insertOnly`, `replace` (whole record —
-  stated, not inherited from backend upsert folklore), and a narrowly defined
-  `merge`. No update operators, no expressions.
+- **Modes are explicit and few**: `insertOnly` and `replace` (whole record —
+  stated, not inherited from backend upsert folklore). No update operators,
+  no expressions — and no `merge` in v1: partial merge hides conflict
+  semantics and is the first step toward an update language, so it stays
+  deferred until a real need defines it narrowly.
 - **Stable ids, optional compare-and-swap versions, mandatory idempotency
-  keys** — retried agent turns must not duplicate memories.
+  keys, per-record outcomes** — retried agent turns must not duplicate
+  memories, and a batch reports each record's result plus one batch receipt.
 - **Embedding is catalog-governed**: the EmbeddingSpec decides what gets
   embedded and with what; a model never picks an encoder.
-- **Writes return receipts**:
+- **Writes return receipts with named visibility states.** One write can
+  touch several derived representations — the canonical record, a lexical
+  index, one or more embeddings (two, mid-migration), graph extraction —
+  and one opaque watermark cannot say which of them is ready:
 
   ```json
-  { "writeReceipt": { "recordVersion": 1441, "watermark": "opaque:…",
-                      "embeddingState": "pending" } }
+  { "writeReceipt": "wr_7f2…",
+    "records": [{ "id": "memory:venue:soho:fridge2", "version": 1,
+      "states": { "record": "committed", "lexical": "ready",
+                  "embedding:memory_text@3": "pending" } }] }
   ```
 
-  and any query may carry `afterWrite: watermark` — *execute only when the
-  acknowledged write, and whatever embedding state the query needs, is
-  visible* — or receive a structured timeout. That single portable primitive
-  replaces every sleep-and-retry loop and every backend-specific freshness
-  concept, and it is what makes agent memory actually dependable: an agent
-  that just stored a fact can rely on retrieving it.
+  A query then names its dependencies:
+
+  ```json
+  { "afterWrite": { "receipt": "wr_7f2…",
+                    "require": ["record", "embedding:memory_text@3"] } }
+  ```
+
+  — *execute only when the named states are visible*, or return a structured
+  timeout. The normalized guarantee, portable across integrated and
+  split-store adapters alike: **a successful write can later be named as a
+  dependency, and execution either observes the required record and derived
+  indexes or fails explicitly.** That single primitive replaces every
+  sleep-and-retry loop and every backend-specific freshness concept, and it
+  is what makes agent memory actually dependable.
 - Deletion is explicit and by id; TTLs are catalog policy. Scope applies to
   writes exactly as to reads: an agent may only write where its scope says.
 
 ### 3.10 Derived datasets, artifacts, and the by-reference principle
+*(runtime extensions — specified here, deferred from the first normative
+release; see §3.1 and §5.2)*
 
 The end products of agent data work are rarely rows in a chat: they are new
 datasets, tables, charts, dashboards, reports. None of that may be paid for
@@ -819,13 +918,27 @@ materialized datasets, and rendering surfaces without transiting the model.
   A two-million-row aggregation becomes a queryable dataset without one row
   entering context. The new dataset carries full provenance (source
   datasets, plan hash, anchor, watermark, the scope fingerprint it was
-  computed under) and inherits the **most-restrictive** policy of everything
-  it derived from — field policies, capability tags, and partition
-  constraints flow through, so a derived dataset can never launder privilege
-  (a rule the precedent systems in §2.1 each discovered independently).
-  Refresh is explicit: re-materialize produces a new version with a new
-  provenance record; a materialized dataset is a labeled snapshot, never
-  silently live.
+  computed under). **Derived-data policy is harder than "most restrictive
+  wins", and the spec does not pretend otherwise.** Blind inheritance breaks
+  legitimate cases (a field forbidding `select` but permitting cohort-gated
+  `avg` would make the materialized average unusable), while dropping
+  restrictions leaks (small cohorts; a dataset materialized under a wide
+  partition scope read later by a narrower principal). A correct general
+  answer needs an information-flow lattice — source policies × operation
+  semantics × cohort thresholds × output lineage → derived policy — with its
+  own conformance tests. Until that exists, v1 takes the safe position:
+  **a materialized dataset is bound to its creator's exact effective scope**
+  (readable only by principals whose scope covers the scope it was computed
+  under), and any wider release requires an explicit, reviewed output policy
+  per derived field via publication. Ownership still merges by the §3.7
+  algebra; it is *policy propagation* that refuses to be automatic. Refresh
+  is explicit: re-materialize produces a new version with a new provenance
+  record; a materialized dataset is a labeled snapshot, never silently live.
+  And `fromReceipt` is precise about what it consumes: a **plan receipt**
+  re-runs the logical plan now; an **execution receipt** re-runs with the
+  original anchor; a **snapshot-pinned result receipt** or persisted
+  **result handle** reuses the exact rows already produced — a successful
+  preview does not silently promise its full result was retained.
 - **Sharing is a principal decision.** Within the creator's own scope, a
   derived dataset is immediately queryable — by the creator, and by any
   sub-agent holding an attenuation of that scope (a dataset name plus a
@@ -897,11 +1010,23 @@ multi-query plus agent synthesis, or materialize-and-import. Both sides log
 the same canonical query hash, so a cross-application access is one
 auditable event with two coordinated records.
 
-### 3.11 The MCP surface
+### 3.11 The MCP surface — and the other transport profiles
 
-MCP is the front door and the reference deployment; the tool names, schemas,
+MCP is the **normative agent-facing profile**: the tool names, schemas,
 resource shapes, and error payloads are normative, so any AgQL server looks
-identical to any MCP client. The surface is small:
+identical to any MCP client. But the core is transport-independent, and MCP
+— one JSON-RPC request per HTTP POST, no protocol-level sessions — is the
+right wire for discovery, catalog resources, and ordinary agent calls, not
+necessarily for tight retrieval loops, pagination, bulk ingestion, or
+service-to-service traffic. Those run on the equivalent **HTTP/JSON
+data-plane profile** (persistent connections, cursors, streaming result
+handles), with an embedded profile for in-process use and optional binary
+transports for internal bulk movement. Same contract, same semantics, every
+wire. Performance claims follow the same honesty rule as everything else:
+responses carry a component timing breakdown (validation, planning, query
+embedding, backend, policy/projection), because a 40 ms remote embedding
+call must never be blamed on the database — and "fast" is a benchmark
+result, never part of the language definition. The MCP surface is small:
 
 - `search_catalog` / `describe_catalog` / `lookup_values` — progressive
   disclosure, scope-narrowed; the index in the prompt stays flat as the
@@ -924,11 +1049,20 @@ identical to any MCP client. The surface is small:
   expiry, invalidated by catalog/policy changes), not to a transport session.
   Works identically over MCP, REST, and embedded use.
 
-**Result channels are an architecture, not a redaction pass.** The model
-channel is a bounded, policy-filtered preview. The **principal channel** is
-an opaque, audience-bound result handle resolved by the trusted host or
-principal SDK — pagination, streaming, export — which the model never holds.
-A prompt-injected agent cannot exfiltrate what its channel never contained.
+**Result channels are an architecture, not a redaction pass — and they need
+the host's cooperation.** The model channel is a bounded, policy-filtered
+preview. The principal channel delivers full results — pagination,
+streaming, export — through a **separately authenticated application
+endpoint**, never inside the MCP tool result: MCP audience annotations are
+advisory, and a generic client controls what enters model context, so a
+handle returned in-band could be handed straight to the model by a careless
+host. The tool result therefore carries only a non-authoritative
+`principalResultAvailable: true`; the trusted host requests the result with
+its own user credential. This is why conformance has a **Host Profile**
+alongside engine and adapter profiles. The claim, stated honestly: *a
+conforming host can ensure the model never receives principal-only
+payloads* — the server enforces what it can (nothing principal-only ever
+appears in a tool result) and the host profile specifies the rest.
 
 **Every retrieval answer carries a provenance envelope:**
 
@@ -950,17 +1084,14 @@ An approximate answer is thereby *auditable* without pretending to be exact:
 you know which data version, which embedding definition, which index state,
 and which quality promise produced it.
 
-A REST/JSON profile exposes the same contract to browsers and SDKs (MCP for
-agents is normative, not exclusive); gRPC/streaming are optional profiles.
-Caches key on the **effective plan** — language + catalog + policy versions,
-scope fingerprint, embedding spec, query-vector digest, watermark, anchor,
-channel policy — never on the source-query hash alone, which remains the
-audit/persistence identity.
+Caches key on the **executionFingerprint** (§3.5) — never on the
+source-query hash alone, which remains the audit/persistence identity.
 
 ### 3.12 Errors as a specified part of the language
 
 1. Every rejection is addressed to the model: it names the offending part by
-   path, states the rule, and **enumerates the legal alternatives**.
+   **JSON Pointer** (`"/order/0/by"` — standardized, unambiguous), states
+   the rule, and **enumerates the legal alternatives**.
 2. Stable machine code + self-contained sentence; error frequencies are the
    empirical feedback loop for evolving the language.
 3. **Never enumerate what scope hides** — an unauthorized dataset yields the
@@ -983,8 +1114,11 @@ query content into ordinary logs": the audit store splits into an
 an encrypted **replay envelope** (full query values, query text/vector,
 effective scope, embedding provenance) under stricter access and retention.
 Replays re-execute the exact query with its logged anchor and watermark —
-under the same or a different scope — and diff the answers. The agent's
-transcript is never the audit record; the engine's is. And because the
+under the same or a different scope — and diff the answers; for approximate
+retrieval the replay tier (§3.5) governs what "replay" can promise —
+auditable always, re-evaluable usually, exactly replayable only where the
+answer said so. The agent's transcript is never the audit record; the
+engine's is. And because the
 replay envelope can hold personal data (filter values, query text, query
 vectors), it participates in **compliance erasure**: an erasure cascade
 reaches records, embeddings, caches, and replay envelopes alike, with the
@@ -1034,7 +1168,7 @@ rule via similarity search over compensation notes, because embedding access
 is its own permission. Today column grants are all-or-nothing, row security
 doesn't distinguish operations, and no vector store has heard of any of it.
 
-**5. Results the model cannot exfiltrate.**
+**5. Results the model cannot exfiltrate (in a conforming host).**
 "Prepare the top-50 customers report" returns the model a redacted, capped
 preview plus an execution receipt; the human's UI resolves the full rows
 through an audience-bound handle the model never held. A prompt injection
@@ -1083,6 +1217,29 @@ AgQL does not measurably reduce agent mistakes and improve enforcement on
 that experiment, the abstraction has not earned its complexity. If it does,
 that result is the moat.
 
+**The full falsification test.** The project has earned its complexity only
+if a reference implementation demonstrates all eight:
+
+1. The same exact-query corpus produces canonical-equivalent results on two
+   materially different backend architectures.
+2. No adversarial approximate query ever returns an out-of-scope or
+   predicate-ineligible candidate.
+3. A write receipt reliably blocks retrieval until the required record and
+   embedding states are visible.
+4. Models produce fewer semantic and repair errors through AgQL than through
+   raw SQL plus a native vector API.
+5. The model channel never receives principal-only payloads in a conforming
+   host.
+6. Retrieval provenance is complete enough to distinguish bad source data,
+   stale indexing, embedding drift, and model misinterpretation.
+7. Compiler/runtime overhead is small relative to backend and embedding
+   latency (measured per component, §3.11).
+8. Catalog authoring is light enough that a useful deployment does not
+   require modelling the whole organisation first.
+
+Failing this test means AgQL is a sophisticated integration layer whose
+complexity outweighs its benefits — and the honest response would be to stop.
+
 ---
 
 ## 5. What makes it genuinely good — and where it stops
@@ -1128,10 +1285,14 @@ that result is the moat.
   arbitrary self-joins, unions stay out of v1; real demand gets the *bounded,
   named* form (a `deltaOverPrevious` select kind, a `rank` with mandatory
   partition and take), never the general mechanism.
-- **Deferred, explicitly**: cross-adapter federation; graph traversal
-  language; universal KV claims; portable lexical-scoring semantics; a
-  universal cost-credit unit; formal DP as default; byte-identical ANN
-  anything.
+- **Deferred from the first normative release, explicitly**: materialized
+  datasets, artifacts, and publication workflows (specified in §3.10 as
+  runtime extensions — excellent dogfood, not needed to prove the thesis);
+  inline nesting and `derive`; `merge`; percentile; offline attenuable
+  credentials (server-side scope objects first); cross-adapter federation;
+  graph traversal language; universal KV claims; portable lexical-scoring
+  semantics; a universal cost-credit unit; formal DP as default;
+  byte-identical ANN anything; broad compensating joins and grouping.
 - **Not an ORM, not a natural-language layer, no client-trusted anything.**
 
 ### 5.3 Honest risks
@@ -1205,3 +1366,16 @@ that result is the moat.
     right when the contract includes storage, retrieval, and derived
     datasets — and does the query language keep the name while the whole is
     something like an "agent data contract"?
+
+---
+
+## 7. The next document
+
+This brief is the **vision and design-rationale paper**, and it should stay
+that. The next deliverable is a much smaller **normative RFC** containing
+only: the v1 data model and kind system, the three query modes, policy
+evaluation, write receipts with named visibility states, the result-channel
+contract (including the host profile), and the exact and approximate
+conformance suites. Everything in §3.10 and beyond it waits for the RFC's
+second edition — after the falsification test (§5) has been run against the
+first.
