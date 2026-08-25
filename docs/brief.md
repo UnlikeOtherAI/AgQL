@@ -761,6 +761,47 @@ materialized datasets, and rendering surfaces without transiting the model.
   Storage-API-side operations with idempotency keys — the query language
   itself remains incapable of creating anything.
 
+**Sharing across products.** In an ecosystem of many products on one
+identity authority, cross-product data sharing is the same design one level
+up — and today it is done pairwise: each product pair builds a bespoke
+integration (proxied MCP turns, webhooks, signed identity headers), so N
+products cost O(N²) integrations. The AgQL model replaces that with four
+rules:
+
+1. **A product's AgQL source is its sharing surface.** Any product that
+   exposes an AgQL catalog is consumable by any other product's agents with
+   zero pairwise integration code: the consumer *mounts* the source (an MCP
+   client + a scope), and the same tools, language, errors, and channels
+   apply. The catalog — not a hand-negotiated API — is the contract.
+2. **Scopes bridge through the identity authority.** A cross-product caller
+   authenticates as (product identity via its product-bound key) + (the
+   delegated end-user via identity-authority token exchange) — the dual
+   proof the ecosystem already uses — and the *serving* product's engine
+   resolves that pair to an attenuated scope under its own catalog and
+   policies. The serving product always remains the authority on what a
+   foreign principal may read; a cross-product grant is recorded like any
+   other (ownership rule: widening is a grant, never a mutation).
+3. **Published datasets are the sharing unit; mirrors are marked, never
+   authorities.** A product publishes a materialized dataset (or live view)
+   to an audience that can include another product. The consumer queries it
+   by reference — or *imports* it as a local dataset whose binding names the
+   remote source, carrying provenance (source product, catalog version,
+   watermark) and explicit refresh. This generalizes the ecosystem's
+   identity invariant to all data: **one product is the durable authority
+   for any shared dataset; every other product holds references or
+   explicitly-marked mirrors with freshness — never a compatibility copy**
+   that drifts into a second authority.
+4. **Memory shares through the memory service, not sideways.** Agent memory
+   is already namespaced `{product}/{org|team|user}` in the shared memory
+   service; cross-product memory sharing is a subject-owned, consented
+   grant across namespaces there — not products reaching into each other's
+   stores.
+
+Cross-*source* joins remain out (§3.8): cross-product composition is
+multi-query plus agent synthesis, or materialize-and-import. Both sides log
+the same canonical query hash, so a cross-product access is one auditable
+event with two coordinated records.
+
 ### 3.11 The MCP surface
 
 MCP is the front door and the reference deployment; the tool names, schemas,
