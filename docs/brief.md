@@ -688,7 +688,21 @@ lifecycle, with the provisioner dropping storage only after archive and
 retention policy. An adapter without the provisioning interface (a mounted
 read-only warehouse, a foreign source) simply cannot host declared datasets
 — a deployment designates a writable home source for them, and `explain`
-says so when a creation is routed there. Adapters declare a capability profile; the core must be *honored*
+says so when a creation is routed there.
+
+**Placement is an adapter strategy, not one layout.** A dedicated physical
+table per dataset is right for large or durable datasets; it is wrong at
+fleet scale, where hundreds of thousands of principals each holding a few
+scratch datasets would mean millions of tables and a catalog-bloated
+backend. An adapter may therefore back small or scratch datasets with a
+shared, engine-validated record store (rows keyed by dataset id, values
+validated against the declared schema before write), or with per-principal
+embedded storage, and migrate a dataset between layouts as it grows or is
+promoted. The layout is invisible to the agent and to the query language;
+what conformance tests are the *guarantees*: no cross-dataset or cross-owner
+read under any layout, identical query semantics across layouts, quota
+accounting, and TTL reaping. `explain` reports the placement class, so cost
+stories stay honest. Adapters declare a capability profile; the core must be *honored*
 everywhere (natively or via bounded compensation, §3.6) and scope pushdown is
 non-negotiable. Physical retrieval choices — flat scan vs HNSW-family vs
 IVF-family vs disk-oriented ANN, dense+sparse hybrid — are adapter concerns
@@ -779,6 +793,25 @@ materialized datasets, and rendering surfaces without transiting the model.
   creator's quota; schema evolution is additive and versioned. From that
   moment it is an ordinary catalog dataset: `put_records` fills it,
   every query mode reads it, artifacts render it, publication shares it.
+- **Scratch datasets and bulk ingestion.** Every dataset carries a
+  **durability tier**. `scratch` — the default for agent-created datasets —
+  is owner-scoped, TTL'd (deployment default on the order of days,
+  extendable within quota), cheap to create, and never publishable;
+  `durable` is the governed tier everything in this section has described.
+  `promote_dataset(name)` upgrades scratch → durable (re-validating quotas
+  and keeping provenance); expiry reaps scratch storage automatically, so
+  exploratory tables cannot silt up the fleet. Bulk data arrives **by
+  reference, never through the model**: the agent names an uploaded file
+  (CSV, JSONL, Parquet) by its attachment handle; the engine parses it
+  server-side, **infers a typed schema** in the closed kind system
+  (timestamps, money, enums detected; the agent may adjust before load),
+  loads the rows entirely in the data plane, and returns a
+  **dataset profile** sized for context — row count, per-column statistics
+  (nulls, cardinality, ranges, top values), and a capped sample. Ingestion
+  is a job with a receipt and watermark like any write; malformed rows are
+  reported as counts plus examples, never dumped. A seventy-thousand-row
+  file becomes a queryable, typed, isolated dataset while the model has
+  read only its profile.
 - **Materialized datasets** are the products of queries. `materialize_dataset(query |
   executionReceipt, name)` runs server-side and freezes the result as a
   first-class, versioned dataset — rows flow from backend to storage with
