@@ -28,7 +28,7 @@ Three pillars are the spine of the design:
    itself part of the contract.
 2. **Fully MCP-enabled.** MCP is *the* access path. Agents reach data entirely
    through the AgQL MCP surface — tools for the query loop, resources for the
-   catalog — and that surface is core language design (§3.10), not an
+   catalog — and that surface is core language design (§3.11), not an
    integration bolted on later.
 3. **Database-agnostic.** AgQL is defined against a **logical data model**, not
    against any backend's language. A per-backend **adapter** compiles AgQL to
@@ -479,7 +479,7 @@ candidate sets across adapters, but instead, all of:
   queries;
 - deterministic final tie-breaking after fusion/rerank;
 - the freshness contract (§3.9) is honored;
-- full provenance is returned (§3.10).
+- full provenance is returned (§3.11).
 
 **Snapshot tiers**, declared per adapter and reported per result:
 `snapshot-exact` (point-in-time read) · `read-your-writes` (watermark
@@ -639,7 +639,64 @@ A separate, deliberately tiny contract — not part of AgQL:
 - Deletion is explicit and by id; TTLs are catalog policy. Scope applies to
   writes exactly as to reads: an agent may only write where its scope says.
 
-### 3.10 The MCP surface
+### 3.10 Derived datasets, artifacts, and the by-reference principle
+
+The end products of agent data work are rarely rows in a chat: they are new
+datasets, tables, charts, dashboards, reports. None of that may be paid for
+in context tokens. The governing rule, stated once and applied everywhere:
+
+> **Data moves by reference. The model's channel carries names, schemas,
+> previews, and receipts — never the payload.**
+
+The model orchestrates; the data plane moves rows between backends,
+materialized datasets, and rendering surfaces without transiting the model.
+
+- **Live views** (§3.4) already exist: a validated query registered as a
+  dataset, recompiling under each reader's scope. They disclose nothing a
+  reader's own scope doesn't allow, so they need no ceremony — but they are
+  computation, not products.
+- **Materialized datasets** are the products. `materialize_dataset(query |
+  executionReceipt, name)` runs server-side and freezes the result as a
+  first-class, versioned dataset — rows flow from backend to storage with
+  the model holding only the receipt and the new dataset's name and schema.
+  A two-million-row aggregation becomes a queryable dataset without one row
+  entering context. The new dataset carries full provenance (source
+  datasets, plan hash, anchor, watermark, the scope fingerprint it was
+  computed under) and inherits the **most-restrictive** policy of everything
+  it derived from — field policies, capability tags, and partition
+  constraints flow through, so a derived dataset can never launder privilege
+  (the same rule Remember Ninja's memory cards enforce for the same reason).
+  Refresh is explicit: re-materialize produces a new version with a new
+  provenance record; a materialized dataset is a labeled snapshot, never
+  silently live.
+- **Sharing is a principal decision.** Within the creator's own scope, a
+  derived dataset is immediately queryable — by the creator, and by any
+  sub-agent holding an attenuation of that scope (a dataset name plus a
+  narrow scope is how agents hand each other large results). Widening the
+  audience — publishing to other users, a team, a capability tag — is a
+  *release* action confirmed through the principal channel, because a
+  snapshot's rows are disclosure, not computation: the human approves what
+  the grant covers, and the grant is recorded like any other scope change.
+  A model can propose publication; it cannot perform it.
+- **Presentation artifacts** — tables and charts — are declarative specs,
+  not data: `artifact = (dataset | stored query) + a closed-vocabulary
+  presentation mapping` (type from an enum — table, line, bar, pie, stat,
+  …; x/y/series mappings validated against the result-shape contract the
+  compiler already returns; formats; layout). An artifact is a few hundred
+  bytes the model can emit, validate, and edit — while the rendering
+  surface resolves the actual data through the principal channel at view
+  time, paginated, under the *viewer's* scope. The model builds and edits
+  dashboards over data it never holds. (This is the aiStats widget model —
+  query + visualization spec, keys checked against select aliases,
+  verify-before-save — generalized and made portable.)
+- **Lifecycle and budgets.** Agent-created datasets and artifacts are
+  quota'd (count, bytes, TTL) and lifecycle-managed (draft → published →
+  archived, with retention policy), so the catalog cannot silt up with
+  abandoned materializations. Creation, refresh, and publication are
+  Storage-API-side operations with idempotency keys — the query language
+  itself remains incapable of creating anything.
+
+### 3.11 The MCP surface
 
 MCP is the front door and the reference deployment; the tool names, schemas,
 resource shapes, and error payloads are normative, so any AgQL server looks
@@ -657,6 +714,10 @@ identical to any MCP client. The surface is small:
   truncation flag, consistency metadata, retrieval provenance, and an
   **execution receipt**.
 - `put_records` — the Storage API (§3.9).
+- `materialize_dataset` / `create_artifact` / `update_artifact` /
+  `propose_publication` — the derived-dataset and artifact operations
+  (§3.10); publication itself completes only with principal-channel
+  confirmation.
 - `save_query(source, name, query, executionReceipt)` — verify-before-persist
   bound to a **signed receipt** (canonical plan hash + scope + principal +
   expiry, invalidated by catalog/policy changes), not to a transport session.
@@ -695,7 +756,7 @@ scope fingerprint, embedding spec, query-vector digest, watermark, anchor,
 channel policy — never on the source-query hash alone, which remains the
 audit/persistence identity.
 
-### 3.11 Errors as a specified part of the language
+### 3.12 Errors as a specified part of the language
 
 1. Every rejection is addressed to the model: it names the offending part by
    path, states the rule, and **enumerates the legal alternatives**.
@@ -711,7 +772,7 @@ audit/persistence identity.
 6. Rejections are tool results, not protocol errors — a readable error is a
    turn; an exception is an outage.
 
-### 3.12 Audit, replay, and the two-tier log
+### 3.13 Audit, replay, and the two-tier log
 
 Every execution logs principal, scope fingerprint, canonical and effective-
 plan hashes, anchor, snapshot/watermark, cost verdict, pushdown/compensation
@@ -801,6 +862,17 @@ receipt lets a REST-based scheduler persist and re-run it — under each future
 reader's scope — with the guarantee it actually executed successfully before
 being saved. Today "the agent tested it" is a claim in a transcript, bound to
 nothing.
+
+**9. A shared dashboard built from millions of rows — with zero rows in
+context.** The agent explores with capped previews, materializes the
+aggregation server-side as a named dataset (holding only the receipt and the
+schema), attaches chart artifacts whose specs are a few hundred bytes each,
+and proposes publication to the team; the human approves the grant. Other
+users' agents then query the derived dataset under their own scopes, and the
+dashboard renders through the principal channel at view time. Total model
+context spent: catalog docs, previews, and references. Today this means
+pasting data between tools, generating one-off chart code, or handing the
+model the rows — and sharing means copy-paste with no governance attached.
 
 The comparative eval (§5.1) exists to make these claims falsifiable: same
 corpus, same tasks — raw SQL vs native vector-store JSON vs AgQL — measuring
@@ -925,7 +997,13 @@ that result is the moat.
     layer the architecture predicts. Remaining question: does aiStats
     follow as the second dogfood (the aggregate-heavy workload), and in
     what order?
-12. **The name.** "AgQL" now covers more than queries; is the name still
-    right when the contract includes storage and retrieval — and does the
-    query language keep the name while the whole is something like an "agent
-    data contract"?
+12. **Derived-data mechanics.** Where do materialized rows live — the
+    source backend, a runtime-owned store, or the deployment's choice — and
+    who pays for them? How rich is the artifact presentation vocabulary in
+    v1 (a handful of chart types with validated mappings, or a bounded
+    grammar), and is scheduled re-materialization ("refresh nightly") a v1
+    feature or an application concern above the contract?
+13. **The name.** "AgQL" now covers more than queries; is the name still
+    right when the contract includes storage, retrieval, and derived
+    datasets — and does the query language keep the name while the whole is
+    something like an "agent data contract"?
