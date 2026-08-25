@@ -407,6 +407,22 @@ JSON) for logs, docs, diffs, and humans. The agent reasons freely in prose
 and emits the query as a tool call — never forced to open with the
 constrained block.
 
+**Encoding profiles.** The canonical form is one; input encodings may be
+several. Alongside JSON, conforming servers accept **AgQL-YAML** — the same
+language in YAML syntax — on the HTTP profile, in stored-query and catalog
+files, and on human surfaces (MCP tool arguments remain JSON, as the
+protocol requires). YAML earns its place by being lighter to read and
+author — catalogs especially — but only as a strictly fenced subset,
+because general YAML is a determinism hazard: AgQL-YAML is YAML 1.2 core
+schema only, **no anchors or aliases, no merge keys, no custom tags, no
+multi-document streams, duplicate keys are an error**, with depth and size
+caps — effectively JSON with YAML's surface. Every accepted encoding is
+normalized to the canonical JSON form at the edge *before* anything else
+happens; hashing, validation, audit, and semantics see only the canonical
+form, so two encodings of one query have one `sourceQueryHash`. An
+encoding is never a dialect: if a construct cannot round-trip through the
+canonical form byte-identically, it is not accepted.
+
 Queries declare one of three **modes** — `records` (fetch), `aggregate`
 (group/measure), `retrieve` (semantic/hybrid search) — so the first
 discriminator an agent emits is the shape of its question.
