@@ -653,7 +653,42 @@ AgQL → engine (validate · scope · plan · limits · budget · channels)
 The engine owns meaning; adapters own translation. A **binding** maps each
 dataset/field/edge/EmbeddingSpec to physical storage — so moving a dataset
 between backends is a binding change, invisible to every agent, stored query,
-and prompt. Adapters declare a capability profile; the core must be *honored*
+and prompt.
+
+**Provisioning: agents never create tables — the engine does.** Declared
+datasets (§3.10) need physical storage, so the adapter contract includes an
+optional **provisioning interface**: given a validated logical schema, the
+adapter creates the backing structure — a table on a relational backend, a
+collection on a document backend — inside a dedicated, runtime-owned
+namespace, with system columns the spec requires (record id, version, the
+owner tuple, timestamps, watermark bookkeeping) and the indexes the declared
+retrieval needs imply (an embedding column and ANN index where an
+EmbeddingSpec is declared, lexical indexing where text search is). Three
+invariants make this safe:
+
+1. **There is no DDL in any agent-facing surface.** A schema is a validated
+   JSON value in the closed kind system; the engine translates it. An agent
+   can no more emit `CREATE TABLE` than it can emit `DROP TABLE` — the
+   grammar has neither.
+2. **Physical identifiers are engine-generated, never model strings.** The
+   catalog name is the logical identity; the table/collection name is a
+   synthetic id minted by the runtime. The closed-vocabulary invariant
+   (§3.6) extends to identifiers: nothing the model wrote is ever spliced
+   into DDL, not even a sanitized name.
+3. **Three privilege tiers, three roles.** Queries run on a read-only role;
+   Storage-API writes run on a writer role confined to the runtime's
+   dataset namespace; provisioning DDL runs on a third role used only by
+   the provisioner, never in any request path a query or write can reach.
+   A compromise of the query path cannot write; a compromise of the write
+   path cannot alter schemas.
+
+Schema evolution is additive-only and versioned (the provisioner issues the
+corresponding `ADD COLUMN`-class change); retirement follows the dataset
+lifecycle, with the provisioner dropping storage only after archive and
+retention policy. An adapter without the provisioning interface (a mounted
+read-only warehouse, a foreign source) simply cannot host declared datasets
+— a deployment designates a writable home source for them, and `explain`
+says so when a creation is routed there. Adapters declare a capability profile; the core must be *honored*
 everywhere (natively or via bounded compensation, §3.6) and scope pushdown is
 non-negotiable. Physical retrieval choices — flat scan vs HNSW-family vs
 IVF-family vs disk-oriented ANN, dense+sparse hybrid — are adapter concerns
