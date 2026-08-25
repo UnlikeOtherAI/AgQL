@@ -221,6 +221,25 @@ its memory cards, its ingestion segmenter — that is a *domain application*,
 exactly the layer AgQL says belongs in purpose-built tools above the
 substrate.
 
+**A third precedent, KiloTalk**, closes the case. A support-response
+suggester whose admin loop learns from the humans it assists: suggestions are
+attributed against what the human actually sent (embedding-similarity edit
+classification), edits become feedback events, an extractor distills them
+into versioned, embedded **lessons** with evidence and history, retrieval
+scores lessons back into future suggestions with per-use attribution rows
+(lesson id, version, rank, similarity, score — a hand-built provenance
+envelope), an outcome judge closes the loop, and a nightly half-life decay
+retires what stops being reinforced. Underneath that genuinely novel domain
+loop sits the same substrate a third time: seven separately-plumbed pgvector
+tables on the same embedding model the other two systems use, hand-written
+similarity-scoring SQL, bespoke namespaced MCP tools, outcome-gated
+retrieval, and an eval/replay harness. The lesson for AgQL is the division
+the loop itself proves: extraction, decay, and judgment are *application*
+intelligence and stay above the contract — while versioned embedded records,
+retrieval with scoring profiles, per-use provenance, scoped access, and
+freshness are the substrate that has now been built three times where once
+would have done.
+
 ### 2.2 Query-language lineage
 
 **GraphQL**: schema-typed queries with no storage access, traversal only along
