@@ -339,8 +339,15 @@ facts, temporal belief history, supersession and decay, hybrid retrieval,
 retrieval traces, isolated per-agent contexts, hierarchical scopes with
 bounded delegation, and MCP access — on top of the vector stores' named
 multi-vectors, documented embedding migrations, and consistency-level
-primitives. Nearly every individual *feature* in this brief is occupied
-territory somewhere.
+primitives. At the grassroots end, **community memory hubs** ("one
+database, one gateway — every AI tool shares the same memory of you") have
+drawn thousands-strong followings around nothing more than a Postgres
+schema, an MCP gateway, and a great on-ramp — proof of raw demand for the
+shared-memory story, and proof that *adoption mechanics* (an evening-sized
+quickstart, data importers that create gravity on day one, a
+beginner-to-advanced extension path, contributable recipes) matter as much
+as architecture. Nearly every individual *feature* in this brief is
+occupied territory somewhere.
 
 What none of them ships — because each is tied to its own engine and data
 model — is the **contract**: a portable execution specification that says
@@ -1267,6 +1274,16 @@ complexity outweighs its benefits — and the honest response would be to stop.
   (Postgres+pgvector), split-store (embedded + vector sidecar), distributed
   vector — because two SQL dialects prove a dialect layer, while a split
   store and a non-SQL engine prove the *contract*.
+- **An adoption on-ramp, treated as a deliverable.** The grassroots memory
+  hubs prove that a governed substrate wins users through mechanics, not
+  architecture: a quickstart that goes from nothing to a working,
+  agent-queryable store in one evening on the embedded adapter; **importers
+  as first-class recipes** (chat-history exports, note archives, mailboxes
+  — each just a catalog fragment plus an Ingest script, and each one
+  *governed* the moment it lands, which no hand-rolled import pipeline
+  gives); a starter catalog small enough to read; and catalog-generated
+  "skill packs" that teach any MCP client the store. A spec whose first
+  hour is a conformance document loses to a schema with a good README.
 - **A reference implementation** shaped for adoption: TypeScript engine as
   pure functions, adapters as packages, the MCP server as a thin shell.
 
