@@ -150,6 +150,17 @@ enormous undocumented namespace. Curated vocabularies attack exactly that.
 Nothing here is invented from nothing. The pieces exist, proven separately;
 the whitespace is the contract that joins them.
 
+> **Normativity note.** Every named system in this brief — the in-house
+> precedents below and the public languages after them — is **non-normative**:
+> prior art that motivates a rule, or an example deployment that will consume
+> the result. The specification itself depends on no product, company system,
+> or vendor. Wherever the design needs an external role — an *identity
+> authority*, a *memory service*, a *model gateway*, a *rendering surface* —
+> that role is an abstract interface a deployment binds to whatever it runs.
+> Anything that only makes sense for one specific ecosystem belongs in a
+> deployment plan (see `docs/rollout.md` for the author's own), never in the
+> spec.
+
 ### 2.1 The in-house precedents: aiStats querySpec and Remember Ninja
 
 The closest working precedent is in-house: the Kilomayo monorepo's AI stats
@@ -743,7 +754,7 @@ materialized datasets, and rendering surfaces without transiting the model.
   computed under) and inherits the **most-restrictive** policy of everything
   it derived from — field policies, capability tags, and partition
   constraints flow through, so a derived dataset can never launder privilege
-  (the same rule Remember Ninja's memory cards enforce for the same reason).
+  (a rule the precedent systems in §2.1 each discovered independently).
   Refresh is explicit: re-materialize produces a new version with a new
   provenance record; a materialized dataset is a labeled snapshot, never
   silently live.
@@ -764,9 +775,9 @@ materialized datasets, and rendering surfaces without transiting the model.
   bytes the model can emit, validate, and edit — while the rendering
   surface resolves the actual data through the principal channel at view
   time, paginated, under the *viewer's* scope. The model builds and edits
-  dashboards over data it never holds. (This is the aiStats widget model —
-  query + visualization spec, keys checked against select aliases,
-  verify-before-save — generalized and made portable.)
+  dashboards over data it never holds. (The query-plus-validated-
+  visualization-spec pattern is proven in production by the first precedent
+  in §2.1; here it is generalized and made portable.)
 - **Lifecycle and budgets.** Agent-created datasets and artifacts are
   quota'd (count, bytes, TTL) and lifecycle-managed (draft → published →
   archived, with retention policy), so the catalog cannot silt up with
@@ -774,46 +785,49 @@ materialized datasets, and rendering surfaces without transiting the model.
   Storage-API-side operations with idempotency keys — the query language
   itself remains incapable of creating anything.
 
-**Sharing across products.** In an ecosystem of many products on one
-identity authority, cross-product data sharing is the same design one level
-up — and today it is done pairwise: each product pair builds a bespoke
-integration (proxied MCP turns, webhooks, signed identity headers), so N
-products cost O(N²) integrations. The AgQL model replaces that with four
-rules:
+**Sharing across applications.** In any ecosystem of multiple applications
+sharing one identity authority, cross-application data sharing is the same
+design one level up — and the status quo everywhere is pairwise: each pair
+of applications builds a bespoke integration (proxied API turns, webhooks,
+signed identity headers), so N applications cost O(N²) integrations. The
+AgQL model replaces that with four rules:
 
-1. **A product's AgQL source is its sharing surface.** Any product that
-   exposes an AgQL catalog is consumable by any other product's agents with
-   zero pairwise integration code: the consumer *mounts* the source (an MCP
-   client + a scope), and the same tools, language, errors, and channels
-   apply. The catalog — not a hand-negotiated API — is the contract.
-2. **Scopes bridge through the identity authority.** A cross-product caller
-   authenticates as (product identity via its product-bound key) + (the
-   delegated end-user via identity-authority token exchange) — the dual
-   proof the ecosystem already uses — and the *serving* product's engine
-   resolves that pair to an attenuated scope under its own catalog and
-   policies. The serving product always remains the authority on what a
-   foreign principal may read; a cross-product grant is recorded like any
-   other (ownership rule: widening is a grant, never a mutation).
+1. **An application's AgQL source is its sharing surface.** Any application
+   that exposes an AgQL catalog is consumable by any other application's
+   agents with zero pairwise integration code: the consumer *mounts* the
+   source (an MCP client + a scope), and the same tools, language, errors,
+   and channels apply. The catalog — not a hand-negotiated API — is the
+   contract.
+2. **Scopes bridge through the identity authority.** A cross-application
+   caller authenticates with a dual proof: the calling application's own
+   identity (an application-bound credential) plus the delegated end-user
+   (a token exchange against the shared identity authority). The *serving*
+   application's engine resolves that pair to an attenuated scope under its
+   own catalog and policies. The serving side always remains the authority
+   on what a foreign principal may read; a cross-application grant is
+   recorded like any other (ownership rule: widening is a grant, never a
+   mutation).
 3. **Published datasets are the sharing unit; mirrors are marked, never
-   authorities.** A product publishes a materialized dataset (or live view)
-   to an audience that can include another product. The consumer queries it
-   by reference — or *imports* it as a local dataset whose binding names the
-   remote source, carrying provenance (source product, catalog version,
-   watermark) and explicit refresh. This generalizes the ecosystem's
-   identity invariant to all data: **one product is the durable authority
-   for any shared dataset; every other product holds references or
+   authorities.** An application publishes a materialized dataset (or live
+   view) to an audience that can include another application. The consumer
+   queries it by reference — or *imports* it as a local dataset whose
+   binding names the remote source, carrying provenance (source
+   application, catalog version, watermark) and explicit refresh. The
+   general invariant: **one application is the durable authority for any
+   shared dataset; every other application holds references or
    explicitly-marked mirrors with freshness — never a compatibility copy**
-   that drifts into a second authority.
-4. **Memory shares through the memory service, not sideways.** Agent memory
-   is already namespaced `{product}/{org|team|user}` in the shared memory
-   service; cross-product memory sharing is a subject-owned, consented
-   grant across namespaces there — not products reaching into each other's
-   stores.
+   that drifts into a second authority. (The same rule ecosystems already
+   apply to identity data, extended to all data.)
+4. **Memory shares through a memory service, not sideways.** Where a
+   deployment runs a shared agent-memory service, memory is namespaced per
+   application and per principal; cross-application memory sharing is a
+   subject-owned, consented grant across namespaces *inside that service* —
+   never applications reaching into each other's stores.
 
-Cross-*source* joins remain out (§3.8): cross-product composition is
+Cross-*source* joins remain out (§3.8): cross-application composition is
 multi-query plus agent synthesis, or materialize-and-import. Both sides log
-the same canonical query hash, so a cross-product access is one auditable
-event with two coordinated records.
+the same canonical query hash, so a cross-application access is one
+auditable event with two coordinated records.
 
 ### 3.11 The MCP surface
 
@@ -1103,35 +1117,16 @@ that result is the moat.
 10. **Cost units across paradigms.** Can one budget vocabulary meaningfully
     cover a warehouse scan and an ANN probe, or do budgets stay
     per-adapter-family in v1?
-11. **First deployment — decided: Remember Ninja first, distributed
-    through deep.agent.** The rollout is a hub-and-spoke, not per-product
-    adoption. **Phase 0**: AgQL becomes Remember Ninja's engine — it
-    already demands both modes (keypath `records` lookups + hybrid
-    `retrieve`), the Storage API, watermarks, EmbeddingSpecs,
-    subject-scoped privacy, and two backends with two architectures (cloud
-    Postgres+pgvector integrated; local SQLite CLI split-store) that today
-    implement the same concepts twice by hand. Its editorial verbs
-    (`remember`/`why`/`forget`, cards, ingestion) stay the thin domain
-    layer above. **Phase 1**: wire deep.agent's `@deep/memory`
-    `RememberNinjaStore` — the adapter already exists as a feature-flagged
-    stub whose contract (classification, provenance, taint-with-safe-
-    default, `{org, team, user}` principal, freshness) is already an AgQL
-    model-channel client in miniature — and extend that contract with
-    write receipts and `afterWrite` watermarks so consumers get
-    read-your-writes rather than inheriting fire-and-forget memory.
-    **Phase 2**: every deep.agent consumer gets governed memory by
-    upgrading a dependency — DeepSignal (filesystem link), DeepTest
-    (re-vendor), the monorepo's aiStats agent (swap its process-lifetime
-    `InMemoryStore`); DeepWater adopts deep.agent as intended. **Phase 3**:
-    the two big parallel stacks migrate — nessie's Thoughts subsystem (the
-    ancestor deep.agent was extracted from, still running its own ~8.5k-LOC
-    memory stack with no agent-facing API) and the monorepo's structured-
-    analytics side (classic widgets onto the catalog). Full AgQL surfaces
-    (structured queries, datasets, artifacts) then expose product-by-
-    product on the runtime the memory path already proved. Remaining
-    question: per-product namespacing — one hosted multi-catalog AgQL
-    behind the ninja API, or one catalog with a product partition
-    dimension?
+11. **First deployment.** The spec should be extracted from working
+    deployments, not designed in a vacuum — ideally a first deployment that
+    exercises both query modes, the Storage API, watermarks, and two
+    adapter architectures at once. The author's own (non-normative)
+    deployment plan lives in [rollout.md](rollout.md); the open design
+    question it surfaces for the spec is **multi-catalog hosting**: when
+    one runtime serves many applications, is each application its own
+    catalog (cleaner isolation), or one catalog with an application
+    partition dimension (cheaper, weaker blast radius)? The spec should
+    take a position on what a conforming multi-catalog server guarantees.
 12. **Derived-data mechanics.** Where do materialized rows live — the
     source backend, a runtime-owned store, or the deployment's choice — and
     who pays for them? How rich is the artifact presentation vocabulary in
