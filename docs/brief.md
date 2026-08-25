@@ -150,7 +150,7 @@ enormous undocumented namespace. Curated vocabularies attack exactly that.
 Nothing here is invented from nothing. The pieces exist, proven separately;
 the whitespace is the contract that joins them.
 
-### 2.1 The in-house precedent: the aiStats querySpec
+### 2.1 The in-house precedents: aiStats querySpec and Remember Ninja
 
 The closest working precedent is in-house: the Kilomayo monorepo's AI stats
 assistant (`organization/backend/lib/aiStats/`) is a production instance of
@@ -180,6 +180,46 @@ filtering, **one backend (Postgres), one paradigm, zero vector or retrieval
 story**, cost control by timeout only, and a bespoke in-process tool surface
 rather than a protocol. Every one was a sane product-scoping decision; the
 list marks exactly where a *language* has to be more than a *feature*.
+
+**The second precedent is Remember Ninja** (`remember.ninja` /
+`remember.ninja-cli`) — memory-as-a-service for agents, and the strongest
+demand evidence this brief has: a memory product whose architecture was
+forced, independently and for one vertical, to reinvent most of AgQL's
+runtime contract. Its shipped v1: versioned assertions with hierarchical
+keypaths (deterministic point lookup), supersede-and-retract instead of
+overwrite, hybrid lexical+semantic search over Postgres FTS + pgvector,
+scoping by service → user/team, REST + WebSocket + MCP transports, and a
+local-first SQLite CLI implementing the *same concepts on a second backend*.
+Its v3 target design converges further, line by line, on this brief:
+`index_state: lexical_only|embedded` and `indexed_through` on every recall
+**are** the write-watermark / read-your-writes contract; pinned immutable
+`embedding_profiles` with dual-write blue-green migration **are**
+EmbeddingSpecs; server-derived most-restrictive visibility, per-membership
+clearance ranks, and a registry-authoritative RLS matrix **are** the scope
+model; RRF fusion with deterministic final ordering and raw scores never
+exposed **is** the retrieval profile; mandatory idempotency keys, metered
+quotas enforced before work begins, visibility-preserving `not_found`, and a
+flagged degrade ladder (drop rerank → vector → lexical-only) all appear in
+both documents, discovered separately. Two in-house products, two verticals,
+one substrate reinvented twice — the substrate is the product.
+
+Remember Ninja also *teaches* AgQL things the brief would otherwise miss,
+now folded in as requirements: **data-provenance trust tiers and taint**
+(who wrote a record — verified source vs agent vs external sender — carried
+into the model channel, with trust-weighted ranking and per-author caps so a
+poisoned source cannot stuff the context); **lineage** (supersede history as
+a first-class, queryable version chain, not just `ifVersion` CAS);
+**two-phase guarded destruction** (a preview listing attached rationale and
+dependents plus a confirm token, so an agent weighs before it deletes);
+**compliance erasure as a cascade** that must reach embeddings, caches, and
+the audit's replay envelope — "replayable" and "erasable" have to be
+reconciled by design, not discovered in conflict later; and the reminder
+that retrieved memory is *untrusted evidence, never instructions*, which the
+model channel should label structurally. What stays out of AgQL is equally
+instructive: Remember Ninja's editorial verbs (`remember`, `why`, `forget`),
+its memory cards, its ingestion segmenter — that is a *domain application*,
+exactly the layer AgQL says belongs in purpose-built tools above the
+substrate.
 
 ### 2.2 Query-language lineage
 
@@ -682,7 +722,12 @@ an encrypted **replay envelope** (full query values, query text/vector,
 effective scope, embedding provenance) under stricter access and retention.
 Replays re-execute the exact query with its logged anchor and watermark —
 under the same or a different scope — and diff the answers. The agent's
-transcript is never the audit record; the engine's is.
+transcript is never the audit record; the engine's is. And because the
+replay envelope can hold personal data (filter values, query text, query
+vectors), it participates in **compliance erasure**: an erasure cascade
+reaches records, embeddings, caches, and replay envelopes alike, with the
+operational record keeping only hashes and receipts — replayability and
+erasability are reconciled by design.
 
 ---
 
@@ -867,10 +912,19 @@ that result is the moat.
 10. **Cost units across paradigms.** Can one budget vocabulary meaningfully
     cover a warehouse scan and an ANN probe, or do budgets stay
     per-adapter-family in v1?
-11. **First deployment.** Which real product surface dogfoods this from day
-    one — ideally needing both an aggregate and a semantic retrieval in the
-    same workflow, on two backends, so the pillars are exercised rather than
-    claimed?
+11. **First deployment — Remember Ninja is the leading candidate.** It
+    already demands both modes (keypath `records` lookups + hybrid
+    `retrieve`), the Storage API (idempotent versioned writes), watermarks,
+    EmbeddingSpecs, subject-scoped privacy, and — decisively — **two
+    backends with two architectures already in production**: cloud
+    Postgres+pgvector (integrated) and the local SQLite CLI (split-store),
+    which today implement the same concepts twice by hand. Rebuilding both
+    on one AgQL catalog with two adapters would collapse that duplication,
+    exercise every pillar for real, and leave Remember Ninja's editorial
+    verbs (`remember`/`why`/`forget`, cards, ingestion) as the thin domain
+    layer the architecture predicts. Remaining question: does aiStats
+    follow as the second dogfood (the aggregate-heavy workload), and in
+    what order?
 12. **The name.** "AgQL" now covers more than queries; is the name still
     right when the contract includes storage and retrieval — and does the
     query language keep the name while the whole is something like an "agent
