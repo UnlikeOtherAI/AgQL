@@ -565,6 +565,52 @@ scope = { capabilities, partitions: {dimension → values | all}, principal,
   document or vector store, AgQL's scope layer is likely the only row-level
   authorization the data has ever had.
 
+**Deterministic ownership.** Who owns a piece of data — and therefore who may
+ever see it — is a pure function with a written algebra, never an inference
+made at read time:
+
+1. **Stamped at write, server-derived, immutable.** Every record carries an
+   owner tuple `(tenant, ownerSubject | shared, confidentiality)` derived from
+   the *authenticated* write context. A caller may request a narrower
+   ownership than its context implies, never a wider one: effective =
+   most-restrictive(requested, context). After the write, ownership fields
+   are immutable to the data path; reclassification is a separate audited
+   admin operation that produces a new version, so "who owned this at time T"
+   stays answerable and replays use the ownership as of their anchor.
+2. **Ownership is data, not location.** Where a record was created — which
+   channel, conversation, or agent — is provenance. Who may see it is the
+   owner tuple. Deriving visibility from the container is the classic leak
+   (a memory created in a private context surfacing wherever the agent
+   roams); AgQL forbids it structurally: no read path consults creation
+   context for authorization.
+3. **One identity authority.** Owner subjects and tenants are stable ids from
+   the deployment's declared identity authority; the catalog never stores a
+   second copy of who-is-who. Ownership cannot fork because identity drifted.
+4. **A specified derivation merge.** Anything derived — materialized dataset,
+   view row, embedding, cache entry, index, replay envelope — gets ownership
+   computed by the engine as the most-restrictive merge of its sources:
+   confidentiality = max, partitions = intersection, shared only if every
+   source is shared. Two different subjects' *private* data never merges into
+   one object — the derivation is refused, deterministically, rather than
+   assigned an arbitrary owner. Same sources, same owner, on every backend;
+   the merge has golden conformance tests like any other semantics.
+5. **Derived representations inherit, always.** The embedding of a private
+   field is private to the same owner; cache keys include the owner
+   fingerprint so a cache hit can never become a cross-subject equality
+   oracle; audit replay envelopes carry the owner and participate in erasure.
+   Nothing derived is ever less restricted than its source.
+6. **Widening is a grant, never a mutation.** Sharing does not edit the owner
+   tuple; it appends a recorded, principal-confirmed grant (who, to whom,
+   what, when, computed under which scope). "Who can see X" is therefore
+   always `owner tuple + grant set` — all data, all versioned, all
+   replayable — and revoking a grant is deleting a row, not un-mutating a
+   label.
+7. **Refusal over guessing.** Any operation whose ownership outcome the
+   algebra does not define — mixed-private derivation, a write claiming a
+   subject the context cannot prove, a link between objects the caller cannot
+   fully read — is a typed, repairable error. Ownership is never resolved by
+   precedence luck, evaluation order, or a model's judgment.
+
 ### 3.8 The adapter layer
 
 ```
