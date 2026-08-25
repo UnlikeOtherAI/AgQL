@@ -1049,19 +1049,35 @@ that result is the moat.
 10. **Cost units across paradigms.** Can one budget vocabulary meaningfully
     cover a warehouse scan and an ANN probe, or do budgets stay
     per-adapter-family in v1?
-11. **First deployment — Remember Ninja is the leading candidate.** It
+11. **First deployment — decided: Remember Ninja first, distributed
+    through deep.agent.** The rollout is a hub-and-spoke, not per-product
+    adoption. **Phase 0**: AgQL becomes Remember Ninja's engine — it
     already demands both modes (keypath `records` lookups + hybrid
-    `retrieve`), the Storage API (idempotent versioned writes), watermarks,
-    EmbeddingSpecs, subject-scoped privacy, and — decisively — **two
-    backends with two architectures already in production**: cloud
-    Postgres+pgvector (integrated) and the local SQLite CLI (split-store),
-    which today implement the same concepts twice by hand. Rebuilding both
-    on one AgQL catalog with two adapters would collapse that duplication,
-    exercise every pillar for real, and leave Remember Ninja's editorial
-    verbs (`remember`/`why`/`forget`, cards, ingestion) as the thin domain
-    layer the architecture predicts. Remaining question: does aiStats
-    follow as the second dogfood (the aggregate-heavy workload), and in
-    what order?
+    `retrieve`), the Storage API, watermarks, EmbeddingSpecs,
+    subject-scoped privacy, and two backends with two architectures (cloud
+    Postgres+pgvector integrated; local SQLite CLI split-store) that today
+    implement the same concepts twice by hand. Its editorial verbs
+    (`remember`/`why`/`forget`, cards, ingestion) stay the thin domain
+    layer above. **Phase 1**: wire deep.agent's `@deep/memory`
+    `RememberNinjaStore` — the adapter already exists as a feature-flagged
+    stub whose contract (classification, provenance, taint-with-safe-
+    default, `{org, team, user}` principal, freshness) is already an AgQL
+    model-channel client in miniature — and extend that contract with
+    write receipts and `afterWrite` watermarks so consumers get
+    read-your-writes rather than inheriting fire-and-forget memory.
+    **Phase 2**: every deep.agent consumer gets governed memory by
+    upgrading a dependency — DeepSignal (filesystem link), DeepTest
+    (re-vendor), the monorepo's aiStats agent (swap its process-lifetime
+    `InMemoryStore`); DeepWater adopts deep.agent as intended. **Phase 3**:
+    the two big parallel stacks migrate — nessie's Thoughts subsystem (the
+    ancestor deep.agent was extracted from, still running its own ~8.5k-LOC
+    memory stack with no agent-facing API) and the monorepo's structured-
+    analytics side (classic widgets onto the catalog). Full AgQL surfaces
+    (structured queries, datasets, artifacts) then expose product-by-
+    product on the runtime the memory path already proved. Remaining
+    question: per-product namespacing — one hosted multi-catalog AgQL
+    behind the ninja API, or one catalog with a product partition
+    dimension?
 12. **Derived-data mechanics.** Where do materialized rows live — the
     source backend, a runtime-owned store, or the deployment's choice — and
     who pays for them? How rich is the artifact presentation vocabulary in
