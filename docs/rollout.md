@@ -56,6 +56,33 @@ classic stats) happen only after the substrate has proven itself in
 production twice. The plan is never more than one phase deep on an
 unvalidated bet.
 
+## Community wedge: the OB1 compatibility bridge
+
+Alongside the in-house phases, one outward-facing wedge: **Open Brain (OB1)**
+(github.com/NateBJones-Projects/OB1, ~4.5k stars) is a community-scale,
+self-hosted personal memory hub — Postgres+pgvector on Supabase, a `thoughts`
+table as the universal unit, an MCP gateway, and an ecosystem of extensions,
+importer recipes, and prompt-pack skills. It is the public proof of demand
+for the shared-memory thesis, and it is technically shallow in every
+dimension AgQL is deep: no contract, no portability, RLS-only security with
+full rows entering model context, LLM-directed writes into tables, no
+freshness contract, no embedding lifecycle, no provenance envelope.
+
+The bridge: an **AgQL catalog + binding over an existing OB1 database**. The
+`thoughts` schema is small and stable, so this is on the order of a week —
+and it gives that community a one-command upgrade ("keep your data; gain
+result channels, freshness receipts, operation-level field policies, an
+embedding lifecycle, and a real query language") while giving AgQL a warm,
+thousands-strong audience already self-selected for exactly this problem.
+Their extension/recipe/skill model maps directly onto AgQL: an extension
+becomes a catalog + skill pack; an importer becomes a catalog fragment + an
+Ingest script, governed the moment it lands.
+
+Sequencing: after Phase 0 proves the engine on Remember Ninja, the OB1
+bridge is the cheapest external validation available — a foreign schema
+nobody on the team designed, adopted by users nobody on the team knows.
+Compatibility-as-adoption is how contracts win against implementations.
+
 ## Open question carried here from the brief
 
 Per-application namespacing of the hosted service: one multi-catalog AgQL
