@@ -85,7 +85,7 @@ One round-trip, one fix (`"by": "week"`). No SQL error archaeology.
 ```json
 { "status": "accepted",
   "effectivePlanHash": "sha256:9f2c…",
-  "resultSchema": [ { "id": "week", "kind": "timestamp" },
+  "resultSchema": [ { "id": "week", "kind": "calendarPeriod" },
                     { "id": "wasted", "kind": "money", "currency": "GBP" } ],
   "determinism": { "query": "exact", "snapshot": "readYourWrites" },
   "projection": "from wasteEvents | where occurredAt inPrevious month | group week(occurredAt) | sum(value) as wasted | order week asc | take 10",
