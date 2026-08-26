@@ -530,10 +530,16 @@ dimensions, no model provider. `accuracy` is `exact` (true distance over the
 eligible set — the reference semantics, always available, cheap when
 collections are small or filters are tight) or `approximate` (ANN under a
 named **quality profile**). Hybrid retrieval (semantic + lexical channels) is
-specified as **rank-based fusion** — backend-specific raw scores are not
-portable and are never treated as such — and an optional bounded rerank stage
-records its model version in provenance. Filters and scopes apply to
-candidate *eligibility*, never as post-hoc trimming an adapter may skip.
+specified as **rank-based fusion with one spec-level formula and constant**
+(a fixed RRF definition and `k₀`, stable-ID tie-break): dense and lexical
+scores have unrelated scales, backend raw scores are never portable, and
+lexical rankers legitimately differ per backend — so the *fusion algorithm*
+gets a byte-identical golden suite while end-to-end hybrid *relevance* is
+evaluated statistically against a labeled corpus, and hybrid results are
+always Retrieval-Profile approximate. An optional bounded rerank stage
+records its model version in provenance (deferred from the v0 core).
+Filters and scopes apply to candidate *eligibility*, never as post-hoc
+trimming an adapter may skip.
 
 **Composability**, deliberately small: named queries registered in the
 catalog become datasets (compiling under the reader's scope, so views cannot
@@ -552,8 +558,11 @@ was served under.
 
 **Always, for every query, on every backend:**
 
-- *Structural determinism* — canonical serialization (defined key order,
-  defaults materialized) and therefore a canonical hash. The implication
+- *Structural determinism* — canonical serialization (the standard JSON
+  Canonicalization Scheme, RFC 8785, over the defaults-materialized source
+  tree; exact decimals and money amounts travel as strings precisely so
+  hashing never depends on floating-point formatting) and therefore a
+  canonical hash. The implication
   runs **one way**: equal canonical forms guarantee identical semantics;
   unequal forms may still be semantically equivalent (`A and B` vs
   `B and A`) — the spec does not attempt semantic-equivalence
@@ -605,11 +614,26 @@ candidate sets across adapters, but instead, all of:
 - the freshness contract (§3.9) is honored;
 - full provenance is returned (§3.11).
 
-**Snapshot tiers**, declared per adapter and reported per result:
-`snapshot-exact` (point-in-time read) · `read-your-writes` (watermark
-honored) · `bounded` · `best-effort`. Claims are never silently weakened; a
-query may *require* a tier and receive a structured refusal if the backend
-cannot provide it.
+**Freshness has two independent axes**, declared per adapter and reported
+per result — collapsing them into one "consistency tier" hid real
+differences between backend families:
+
+- *Write visibility*: `unconstrained` or `afterWrite(receipt, required
+  states)` — the dependency contract of §3.9.
+- *Execution snapshot*: `none` · `request` · `transaction` ·
+  `historicalPinned` — what stability the read itself had. Transactional
+  stores offer real snapshots; a retrieval engine's "snapshot" is a backup
+  artifact, not queryable MVCC history, and must not be reported as the
+  same thing.
+
+Claims are never silently weakened; a query may *require* an axis value and
+receive a structured refusal if the backend cannot provide it. Retrieval
+answers additionally carry a **quality certification** reference — the
+corpus, configuration, and version under which the adapter's quality
+profile was measured — because ANN quality drifts with data distribution
+and filter selectivity: deployments re-measure with sampled
+exact-vs-approximate checks, and a stale certification is visible in
+provenance rather than silently trusted.
 
 **Replay tiers** complete the honesty: an approximate answer is always
 *auditable* (the provenance envelope reconstructs the data, policy,
@@ -806,11 +830,48 @@ promoted. The layout is invisible to the agent and to the query language;
 what conformance tests are the *guarantees*: no cross-dataset or cross-owner
 read under any layout, identical query semantics across layouts, quota
 accounting, and TTL reaping. `explain` reports the placement class, so cost
-stories stay honest. Adapters declare a capability profile; the core must be *honored*
-everywhere (natively or via bounded compensation, §3.6) and scope pushdown is
-non-negotiable. Physical retrieval choices — flat scan vs HNSW-family vs
-IVF-family vs disk-oriented ANN, dense+sparse hybrid — are adapter concerns
-selected via logical quality profiles; agents never see a knob.
+stories stay honest.
+
+**Portability is defined by capability profiles, not by pretending backends
+are interchangeable.** A transactional relational store, an embedded
+database, and a dedicated distributed retrieval engine are *not* the same
+kind of system, and forcing one contract onto all of them equally is how
+"portable" degenerates into lowest-common-denominator garbage. Instead, a
+source advertises named profiles — `records.v0`, `aggregate.v0`,
+`retrieve.semantic.v0`, `retrieve.hybrid.v0`, `ingest.canonical.v0`,
+`retrieval-index.v0` — and a query is portable between two sources **iff
+both advertise the profile it uses**. A retrieval engine can honestly ship
+as a **retrieval-index adapter** (semantic/hybrid only, no aggregates, no
+canonical storage) rather than faking SQL; an embedded store can be the
+exact oracle without a distributed story. Declining a profile is honest;
+faking one is non-conformant.
+
+**A dataset's canonical store and its retrieval index are separate
+bindings.** One logical dataset may bind canonical records to a relational
+or embedded store and its retrieval projection to a dedicated vector
+engine, connected by the runtime's durable outbox and embedding worker —
+which is exactly why write receipts track record visibility and
+derived-index visibility as separate named states (§3.9). For an integrated
+backend the two bindings collapse into one; the contract doesn't care.
+
+**The runtime owns embedding generation.** Adapters index and search
+vectors; they never produce them. One EmbeddingSpec resolves to one
+runtime-owned embedder, so `support_body@3` yields the same float vector
+whichever backend stores it — without this, embedding-version provenance
+and cross-backend migration are meaningless. Backend-native inference
+endpoints are never semantic authorities.
+
+Physical retrieval choices — flat scan vs HNSW-family vs IVF-family vs
+disk-oriented ANN, dense+sparse hybrid — are adapter concerns selected via
+logical quality profiles; agents never see a knob. And "pushdown" has a
+precise security meaning rather than a physical one: an ANN traversal may
+touch ineligible index nodes internally (filter-aware graph algorithms do),
+but **no row, payload, text, or candidate representing an ineligible
+logical record may ever cross the backend/adapter trust boundary into the
+engine**. Refusal is a successful safety outcome: unsupported profile,
+un-enforceable scope, exact-scan budget exceeded, unavailable freshness
+tier, an EmbeddingSpec not yet indexed — each is a typed, repairable
+refusal, never a silent downgrade.
 
 **Reference adapters, chosen to prove different things:** Postgres + pgvector
 (one transactional system owning records, filters, exact queries, and
@@ -881,8 +942,27 @@ A separate, deliberately tiny contract — not part of AgQL:
   indexes or fails explicitly.** That single primitive replaces every
   sleep-and-retry loop and every backend-specific freshness concept, and it
   is what makes agent memory actually dependable.
+- **Deletion gets the same receipt contract.** After a delete's `record`
+  state is visible, no read returns the logical record; where
+  semantic-index deletion is asynchronous, a retrieval query can require
+  the relevant `embedding:<spec>` deletion state first — a deleted record
+  resurfacing through a stale vector index is a conformance failure, not a
+  quirk.
+- Compare-and-swap (`ifVersion`) is a **capability of canonical-store
+  adapters**, not a universal storage requirement — a retrieval-index
+  adapter is never forced to become an authoritative store to satisfy it.
+- Chunking is `none` in the v0 core: one record, one embedding per spec.
+  Document-to-chunks ingestion is an application-layer tool that produces
+  ordinary chunk *records*, keeping the storage contract record-oriented.
 - Deletion is explicit and by id; TTLs are catalog policy. Scope applies to
   writes exactly as to reads: an agent may only write where its scope says.
+- **Typed epistemic records (fact / observation / hypothesis with evidence
+  references) are an optional catalog profile, not a core primitive** — a
+  memory product should have them; a POS dataset or telemetry store should
+  not be forced to share an epistemology. The core guarantees the machinery
+  such a profile needs (provenance, receipts, policy, typed values) and
+  maps cleanly onto established provenance models; it does not dictate an
+  ontology of truth.
 
 ### 3.10 Derived datasets, artifacts, and the by-reference principle
 *(runtime extensions — specified here, deferred from the first normative
@@ -1291,10 +1371,18 @@ complexity outweighs its benefits — and the honest response would be to stop.
   dependency-free — the falsification instrument and the pitch.
 - **Cardinality-aware edges**: silently-wrong aggregates are the difference
   between a demo and something a finance team trusts.
-- **Three launch adapters spanning architectures**: integrated
-  (Postgres+pgvector), split-store (embedded + vector sidecar), distributed
-  vector — because two SQL dialects prove a dialect layer, while a split
-  store and a non-SQL engine prove the *contract*.
+- **Three launch adapters spanning architectures — with honest roles**:
+  integrated (Postgres+pgvector: canonical store and retrieval in one,
+  full-profile); embedded (SQLite with its vector extension: the
+  dependency-light reference runner, whose *exhaustive* mode is the exact
+  retrieval oracle while its young ANN mode is exercised as experimental,
+  never trusted as the quality reference); and a dedicated retrieval
+  engine mounted as a **retrieval-index adapter** — semantic/hybrid
+  profiles only, canonical records staying in a transactional store,
+  proving that eligibility, provenance, and quality profiles are genuinely
+  independent of any one vector implementation. Two SQL dialects would
+  prove a dialect layer; a split store and a non-SQL engine in an honest
+  role prove the *contract*.
 - **An adoption on-ramp, treated as a deliverable.** The grassroots memory
   hubs prove that a governed substrate wins users through mechanics, not
   architecture: a quickstart that goes from nothing to a working,
@@ -1323,12 +1411,22 @@ complexity outweighs its benefits — and the honest response would be to stop.
   arbitrary self-joins, unions stay out of v1; real demand gets the *bounded,
   named* form (a `deltaOverPrevious` select kind, a `rank` with mandatory
   partition and take), never the general mechanism.
-- **Deferred from the first normative release, explicitly**: materialized
-  datasets, artifacts, and publication workflows (specified in §3.10 as
-  runtime extensions — excellent dogfood, not needed to prove the thesis);
-  inline nesting and `derive`; `merge`; percentile; offline attenuable
-  credentials (server-side scope objects first); cross-adapter federation;
-  graph traversal language; universal KV claims; portable lexical-scoring
+- **The v0 core is smaller still: one logical dataset per query.** No
+  query-authored joins in v0 — cross-table shapes are hidden behind
+  catalog datasets and views, which removes fan-out semantics, join-scope
+  propagation, and most adapter complexity while keeping all three
+  workloads (lookup, analytics over a prepared dataset, retrieval)
+  testable. Edges and bounded query-authored joins return in a later
+  edition, after the single-dataset contract passes real cross-backend
+  conformance.
+- **Deferred from the first normative release, explicitly**: query-authored
+  joins and edges (above); materialized datasets, artifacts, and
+  publication workflows (specified in §3.10 as runtime extensions —
+  excellent dogfood, not needed to prove the thesis); inline nesting and
+  `derive`; `merge`; percentile; general rerank pipelines; multi-vector /
+  late-interaction retrieval models; offline attenuable credentials
+  (server-side scope objects first); cross-adapter federation; graph
+  traversal language; universal KV claims; portable lexical-scoring
   semantics; a universal cost-credit unit; formal DP as default;
   byte-identical ANN anything; broad compensating joins and grouping.
 - **Not an ORM, not a natural-language layer, no client-trusted anything.**
@@ -1410,7 +1508,8 @@ complexity outweighs its benefits — and the honest response would be to stop.
 ## 7. The next document
 
 This brief is the **vision and design-rationale paper**, and it should stay
-that. The next deliverable is a much smaller **normative RFC** containing
+that. The next deliverable is a much smaller **normative RFC** — first
+draft now at [rfc-v0.md](rfc-v0.md) — containing
 only: the v1 data model and kind system, the three query modes, policy
 evaluation, write receipts with named visibility states, the result-channel
 contract (including the host profile), and the exact and approximate
