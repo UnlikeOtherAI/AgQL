@@ -1,0 +1,17 @@
+version: "1"
+mode: records
+from: orders
+where:
+  kind: and
+  items:
+    - kind: predicate
+      field: orders.createdAt
+      op: inLast
+      amount: 30
+      unit: day
+    - kind: or
+      items:
+        - { kind: predicate, field: orders.channel, op: eq, value: web }
+        - kind: not
+          item: { kind: predicate, field: orders.canceledAt, op: isNotNull }
+take: 100

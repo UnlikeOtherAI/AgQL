@@ -1,0 +1,6 @@
+# EXPECT: ENCODING_ANCHOR_FORBIDDEN
+# Expansion bombs die at the anchor rule before any expansion happens.
+a: &a ["x", "x", "x", "x", "x", "x", "x", "x"]
+b: &b [*a, *a, *a, *a, *a, *a, *a, *a]
+c: &c [*b, *b, *b, *b, *b, *b, *b, *b]
+d: [*c, *c, *c, *c, *c, *c, *c, *c]

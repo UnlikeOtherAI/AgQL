@@ -1,0 +1,11 @@
+# EXPECT: ENCODING_MULTIDOC_FORBIDDEN
+# One request, one document. Streams are outside the profile.
+version: "1"
+mode: records
+from: orders
+take: 1
+---
+version: "1"
+mode: records
+from: payments
+take: 1

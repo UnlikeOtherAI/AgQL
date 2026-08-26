@@ -1,0 +1,7 @@
+{
+  "version": "1",
+  "mode": "aggregate",
+  "from": "orders",
+  "metrics": [ { "kind": "aggregate", "op": "count", "id": "orders" } ],
+  "take": 1
+}

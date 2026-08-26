@@ -1279,7 +1279,12 @@ complexity outweighs its benefits — and the honest response would be to stop.
   core (plus the classic traps: grouping-alias ambiguity, scope predicates on
   left joins, prototype-pollution aliases); invariant + quality-envelope
   suites for retrieval (scope-leak probes, filter adversaries, recall
-  *distributions* not averages, freshness honesty, provenance completeness).
+  *distributions* not averages, freshness honesty, provenance completeness);
+  and an **encoding-equivalence suite** — pairs in every accepted input
+  encoding that must normalize to identical canonical bytes (one query, one
+  `sourceQueryHash`), plus a rejection corpus for every fenced-off encoding
+  feature, each refused with a typed, deterministic error code (the first
+  fixtures live in `conformance/encoding/`).
 - **Catalog-derived teaching as conformance**: docs emitted from the catalog
   through MCP resources; prompt-contract tests in the suite.
 - **The comparative eval harness** (§4) on the embedded adapter,

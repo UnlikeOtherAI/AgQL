@@ -1,0 +1,12 @@
+{
+  "version": "1",
+  "mode": "records",
+  "from": "companiesImport",
+  "where": {
+    "kind": "predicate",
+    "field": "companiesImport.country",
+    "op": "in",
+    "values": ["no", "on", "3.10", "Zürich", "true", ""]
+  },
+  "take": 50
+}

@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "mode": "aggregate",
+  "from": "wasteEvents",
+  "where": { "kind": "predicate", "field": "wasteEvents.occurredAt", "op": "inPrevious", "unit": "month" },
+  "dimensions": [ { "kind": "timeBucket", "field": "wasteEvents.occurredAt", "grain": "week", "id": "week" } ],
+  "metrics": [ { "kind": "measure", "measure": "wasteEvents.wastedValue", "id": "wasted" } ],
+  "order": [ { "by": "week", "dir": "asc" } ],
+  "take": 10
+}

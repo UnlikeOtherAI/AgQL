@@ -1,0 +1,10 @@
+# EXPECT: ENCODING_MERGE_KEY_FORBIDDEN
+# YAML merge keys (<<) are outside the AgQL-YAML profile.
+version: "1"
+mode: records
+from: orders
+where:
+  <<: { kind: predicate, field: orders.channel }
+  op: eq
+  value: web
+take: 10

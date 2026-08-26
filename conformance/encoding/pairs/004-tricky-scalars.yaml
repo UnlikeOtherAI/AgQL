@@ -1,0 +1,13 @@
+# YAML 1.2 core schema + explicit quoting: these stay STRINGS.
+# Unquoted, `no`/`on`/`true` would still be strings under 1.2 core
+# (1.1 booleans are gone), but 3.10 would become the float 3.1 —
+# quoting is how an author states "this is text" unambiguously.
+version: "1"
+mode: records
+from: companiesImport
+where:
+  kind: predicate
+  field: companiesImport.country
+  op: in
+  values: ["no", "on", "3.10", "Zürich", "true", ""]
+take: 50

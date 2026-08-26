@@ -1,0 +1,11 @@
+dataset: agent_memory
+mode: replace
+records:
+  - id: "hypothesis:venue:soho:fridge2"
+    value:
+      kind: hypothesis
+      confidence: medium
+      statement: "Fridge 2 problems likely contributed to Soho's mid-July spoilage."
+    ifVersion: 6
+embeddingPolicy: catalog
+idempotencyKey: "task-7:memory-12"

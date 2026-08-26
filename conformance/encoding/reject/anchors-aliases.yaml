@@ -1,0 +1,8 @@
+# EXPECT: ENCODING_ANCHOR_FORBIDDEN
+# Anchors/aliases are outside the AgQL-YAML profile.
+version: "1"
+mode: records
+from: orders
+where: &w { kind: predicate, field: orders.channel, op: eq, value: web }
+having: *w
+take: 10

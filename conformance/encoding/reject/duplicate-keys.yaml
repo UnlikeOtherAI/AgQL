@@ -1,0 +1,7 @@
+# EXPECT: ENCODING_DUPLICATE_KEY
+# Duplicate mapping keys are a hard error, never last-wins.
+version: "1"
+mode: records
+from: orders
+take: 10
+take: 1000
