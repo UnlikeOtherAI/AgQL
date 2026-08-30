@@ -47,6 +47,19 @@ conformance suite). Full AgQL surfaces — structured queries, datasets,
 artifacts — then expose product-by-product on the runtime the memory path
 already proved.
 
+**Designing to the contract ahead of the runtime.** One Nessie feature is
+already designed against the contract before any phase ships: the
+**agent-tables plan** (`nessie/docs/plans/2026-08-31-agent-tables.md`) —
+agent-owned, shareable simple tables at fleet scale — adopts the v0 shapes
+natively (closed kinds, single-dataset `records`/`aggregate` queries, the
+Ingest receipt contract with named visibility states, declared-dataset
+provisioning, scratch/durable tiers, and §3.8's shared-placement rule for the
+millions-of-small-datasets case). It is a consumer-shaped proof of the
+contract, not a second implementation of the spec: when the runtime lands
+(after Phases 0–2), that feature converges to a catalog + Postgres binding
+rather than a migration, and becomes Nessie's first full AgQL surface in this
+phase.
+
 ## Why this sequencing de-risks the project
 
 Phases 0–2 pay for themselves even if AgQL never becomes a public standard:
