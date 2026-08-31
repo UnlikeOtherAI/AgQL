@@ -74,7 +74,21 @@ importers:
         specifier: ^4.20.5
         version: 4.23.13
 
-  packages/engine: {}
+  packages/engine:
+    dependencies:
+      '@agql/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      '@agql/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@agql/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+    devDependencies:
+      tsx:
+        specifier: ^4.20.5
+        version: 4.23.13
 
   packages/http: {}
 
