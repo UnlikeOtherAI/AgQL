@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   SQLITE_PROFILES,
   createSqliteAdapter,
+  provisionSqliteAdapterStorage,
 } from '@agql/adapter-sqlite';
 import type { EngineQueryAdapter, EngineError } from '@agql/engine';
 import { executeQuery } from '@agql/engine';
@@ -80,7 +81,6 @@ function scalarForStorage(
       return canonicalizeJcs(value);
     case 'id':
     case 'decimal':
-    case 'text':
     case 'enum':
     case 'date':
     case 'instant':
@@ -88,6 +88,11 @@ function scalarForStorage(
         throw new TypeError(`${field.kind} seed value has wrong type.`);
       }
       return value;
+    case 'text':
+      if (typeof value !== 'string') {
+        throw new TypeError('text seed value has wrong type.');
+      }
+      return value.normalize('NFC');
     case 'null':
       throw new TypeError('A null-typed field cannot contain a non-null seed value.');
   }
@@ -227,7 +232,19 @@ function typedJson(value: AdapterResultValue): JsonValue {
   return value.value;
 }
 
+function requestedPageSize(fixture: ExactFixture): number | undefined {
+  const execution = optionalObject(fixture.value, 'execution', fixture.sourcePath);
+  if (execution === undefined) return undefined;
+  const pageSize = execution.pageSize;
+  if (pageSize === undefined) return undefined;
+  if (typeof pageSize !== 'number' || !Number.isSafeInteger(pageSize) || pageSize <= 0) {
+    throw new TypeError('/execution/pageSize must be a positive safe integer.');
+  }
+  return pageSize;
+}
+
 function semanticProjection(
+  fixture: ExactFixture,
   execution: AdapterExecutionResult,
   plan: Awaited<ReturnType<typeof executeQuery<SqliteQueryCompiled>>> & { readonly ok: true },
 ): JsonValue {
@@ -252,7 +269,14 @@ function semanticProjection(
     }
     return released;
   });
-  return logicalPlan.mode === 'aggregate' ? { groups: rows } : { rows };
+  if (logicalPlan.mode === 'aggregate') return { groups: rows };
+  const pageSize = requestedPageSize(fixture);
+  if (pageSize === undefined) return { rows };
+  const concatenatedRows: JsonValue[] = [];
+  for (let offset = 0; offset < rows.length; offset += pageSize) {
+    concatenatedRows.push(...rows.slice(offset, offset + pageSize));
+  }
+  return { concatenatedRows };
 }
 
 function exactLimit(fixture: ExactFixture): number {
@@ -324,12 +348,7 @@ async function executeOnce(
           retrieve: SafeIntegerSchema.parse(QUERY_LIMITS.take.retrieve),
         },
       },
-      calendar: {
-        timezone: 'UTC',
-        timezoneDatabase: 'fixed-offset',
-        weekStart: 'monday',
-        fiscalDayStart: '00:00:00',
-      },
+      calendar: runtime.calendar,
       binding: runtime.binding,
       adapter: counted.descriptor,
       costGate: {
@@ -348,7 +367,7 @@ async function executeOnce(
     if (!result.ok) {
       return { kind: 'refusal', errors: result.errors.map(errorJson), backendCalls };
     }
-    const semantic = semanticProjection(result.value.execution, result);
+    const semantic = semanticProjection(fixture, result.value.execution, result);
     return {
       kind: 'success',
       semantic,
@@ -429,6 +448,7 @@ export function createSqliteExactDriver(): ExactAdapterDriver {
         } finally {
           database.close();
         }
+        provisionSqliteAdapterStorage(databasePath);
         const observations: Record<string, ExactQueryObservation> = {};
         for (const query of queries) {
           observations[query.name] = await executeRepeated(fixture, query.query, databasePath);

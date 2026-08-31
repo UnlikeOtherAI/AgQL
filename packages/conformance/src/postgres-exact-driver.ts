@@ -15,7 +15,7 @@ import type {
   EngineQueryAdapter,
   EngineError,
 } from '@agql/engine';
-import { executeQuery } from '@agql/engine';
+import { executeQuery, resolvedValueType } from '@agql/engine';
 /* eslint-disable max-len */
 
 import type {
@@ -93,7 +93,19 @@ function typedJson(value: AdapterResultValue): JsonValue {
   return value.value;
 }
 
+function requestedPageSize(fixture: ExactFixture): number | undefined {
+  const execution = optionalObject(fixture.value, 'execution', fixture.sourcePath);
+  if (execution === undefined) return undefined;
+  const pageSize = execution.pageSize;
+  if (pageSize === undefined) return undefined;
+  if (typeof pageSize !== 'number' || !Number.isSafeInteger(pageSize) || pageSize <= 0) {
+    throw new TypeError('/execution/pageSize must be a positive safe integer.');
+  }
+  return pageSize;
+}
+
 function semanticProjection(
+  fixture: ExactFixture,
   execution: AdapterExecutionResult,
   plan: Awaited<ReturnType<typeof executeQuery<PostgresQueryCompiled>>> & { readonly ok: true },
 ): JsonValue {
@@ -115,7 +127,14 @@ function semanticProjection(
     }
     return released;
   });
-  return logicalPlan.mode === 'aggregate' ? { groups: rows } : { rows };
+  if (logicalPlan.mode === 'aggregate') return { groups: rows };
+  const pageSize = requestedPageSize(fixture);
+  if (pageSize === undefined) return { rows };
+  const concatenatedRows: JsonValue[] = [];
+  for (let offset = 0; offset < rows.length; offset += pageSize) {
+    concatenatedRows.push(...rows.slice(offset, offset + pageSize));
+  }
+  return { concatenatedRows };
 }
 
 function exactLimit(fixture: ExactFixture): number {
@@ -127,14 +146,7 @@ function exactLimit(fixture: ExactFixture): number {
 }
 
 function fieldType(field: DatasetDocument['fields'][string]): ResolvedFieldBinding['type'] {
-  switch (field.kind) {
-    case 'id': case 'boolean': case 'integer': case 'decimal': case 'date': case 'null':
-      return { kind: field.kind };
-    case 'money': return { kind: 'money', currency: field.currency };
-    case 'text': return { kind: 'text', collation: field.collation };
-    case 'enum': return { kind: 'enum', codes: field.values.map(({ code }) => code) };
-    case 'instant': return { kind: 'instant', precision: field.precision };
-  }
+  return resolvedValueType(field);
 }
 
 function datasetBindings(catalog: CatalogDocument): readonly PostgresDatasetBinding[] {
@@ -202,14 +214,11 @@ function scalar(value: JsonValue, field: DatasetDocument['fields'][string]): See
     return value;
   }
   if (field.kind === 'money') {
-    const money = jsonObject(value, '/seed/*/money');
-    const amount = money.amount;
-    if (typeof amount !== 'string') throw new TypeError('Money seed amount has wrong type.');
-    return amount;
+    return canonicalizeJcs(jsonObject(value, '/seed/*/money'));
   }
   if (field.kind === 'null') throw new TypeError('A null-typed field cannot contain a non-null seed value.');
   if (typeof value !== 'string') throw new TypeError(`${field.kind} seed value has wrong type.`);
-  return value;
+  return field.kind === 'text' ? value.normalize('NFC') : value;
 }
 
 function vector(value: JsonValue): string {
@@ -291,14 +300,14 @@ async function executeOnce(fixture: ExactFixture, query: JsonValue, adapter: Pos
           retrieve: SafeIntegerSchema.parse(QUERY_LIMITS.take.retrieve),
         },
       },
-      calendar: { timezone: 'UTC', timezoneDatabase: 'fixed-offset', weekStart: 'monday', fiscalDayStart: '00:00:00' },
+      calendar: runtime.calendar,
       binding: runtime.binding, adapter: counted.descriptor,
       costGate: { estimate: { estimatedRows: runtime.scope.budgets.maximumExactScanRecords, estimatedCandidateRecords: runtime.scope.budgets.maximumCandidateRecords, estimatedIntermediateBytes: SafeIntegerSchema.parse(1_000_000), selectiveFilterFields: [] }, maximumEstimatedRows: SafeIntegerSchema.parse(1_000_000), maximumIntermediateBytes: SafeIntegerSchema.parse(10_000_000) },
       qualityCertifications: runtime.qualityCertifications,
       ...(runtime.vector === undefined ? {} : { vector: runtime.vector }),
     }, counted);
     if (!result.ok) return { kind: 'refusal', errors: result.errors.map(errorJson), backendCalls };
-    return { kind: 'success', semantic: semanticProjection(result.value.execution, result), sourceQueryHash: result.value.compiled.plan.sourceQueryHash, determinism: 'retrieval' in result.value.compiled.explain.determinism ? 'approximate' : 'exact', repeatedSemanticEqual: true, backendCalls };
+    return { kind: 'success', semantic: semanticProjection(fixture, result.value.execution, result), sourceQueryHash: result.value.compiled.plan.sourceQueryHash, determinism: 'retrieval' in result.value.compiled.explain.determinism ? 'approximate' : 'exact', repeatedSemanticEqual: true, backendCalls };
   } catch (error) {
     return { kind: 'exception', message: error instanceof Error ? error.message : String(error), backendCalls };
   }

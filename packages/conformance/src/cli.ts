@@ -20,13 +20,12 @@ import {
   unavailableRetrievalExecutor,
 } from './retrieval.ts';
 import type { RetrievalMeasurement } from './retrieval.ts';
-import {
-  blockedSecurityExecutor,
-  runSecuritySuite,
-} from './security.ts';
+import { runSecuritySuite } from './security.ts';
 import type { SecurityReplay, SecurityTier } from './security.ts';
+import { createPostgresSecurityProbeExecutor } from './postgres-security-driver.ts';
 import { createSqliteExactDriver } from './sqlite-exact-driver.ts';
 import { createPostgresExactDriver } from './postgres-exact-driver.ts';
+import { createSqliteSecurityProbeExecutor } from './sqlite-security-driver.ts';
 import { runReceiptSuite } from './receipts.ts';
 
 type SuiteName = 'encoding' | 'exact' | 'security' | 'retrieval' | 'portability' | 'receipts';
@@ -201,10 +200,24 @@ async function run(options: CliOptions): Promise<number> {
     }
   }
   if (options.suites.has('security')) {
-    suites.push(await runSecuritySuite(corpusRoot, blockedSecurityExecutor(), {
+    const securityOptions = {
       tier: options.tier,
       ...(options.replay === undefined ? {} : { replay: options.replay }),
-    }));
+    } as const;
+    if (options.adapter === 'sqlite' || options.adapter === 'both') {
+      suites.push(await runSecuritySuite(
+        corpusRoot,
+        createSqliteSecurityProbeExecutor(),
+        securityOptions,
+      ));
+    }
+    if (options.adapter === 'postgres' || options.adapter === 'both') {
+      suites.push(await runSecuritySuite(
+        corpusRoot,
+        createPostgresSecurityProbeExecutor(),
+        securityOptions,
+      ));
+    }
   }
   if (options.suites.has('retrieval')) {
     const retrieval = await runRetrievalSuite(
