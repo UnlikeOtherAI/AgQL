@@ -1,0 +1,17 @@
+{
+  "name": "@agql/conformance",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "tsx --test 'src/**/*.test.ts'",
+    "cli": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@agql/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5"
+  }
+}
