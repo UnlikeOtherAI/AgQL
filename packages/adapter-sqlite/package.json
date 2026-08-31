@@ -3,15 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
-  "scripts": {
-    "test": "tsx --test 'src/**/*.test.ts'"
-  },
-  "dependencies": {
-    "@agql/contracts": "workspace:*",
-    "@agql/schemas": "workspace:*"
-  },
-  "devDependencies": {
-    "tsx": "^4.20.5"
-  }
+  "exports": "./src/index.ts"
 }
+
