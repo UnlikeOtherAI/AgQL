@@ -6,7 +6,6 @@ import { canonicalizeJcs } from '@agql/schemas';
 
 import { runEncodingSuite } from './encoding.ts';
 import { runExactSuite } from './exact.ts';
-import { deferredReceiptCoverage } from './extensions.ts';
 import { blocked, fixtureResult } from './outcomes.ts';
 import { runPortabilitySuite } from './portability.ts';
 import type { PortabilitySuiteExecution } from './portability.ts';
@@ -28,8 +27,9 @@ import {
 import type { SecurityReplay, SecurityTier } from './security.ts';
 import { createSqliteExactDriver } from './sqlite-exact-driver.ts';
 import { createPostgresExactDriver } from './postgres-exact-driver.ts';
+import { runReceiptSuite } from './receipts.ts';
 
-type SuiteName = 'encoding' | 'exact' | 'security' | 'retrieval' | 'portability';
+type SuiteName = 'encoding' | 'exact' | 'security' | 'retrieval' | 'portability' | 'receipts';
 type AdapterSelection = 'sqlite' | 'postgres' | 'both';
 
 interface CliOptions {
@@ -47,13 +47,14 @@ const ALL_SUITES: readonly SuiteName[] = [
   'security',
   'retrieval',
   'portability',
+  'receipts',
 ];
 
 const USAGE = `AgQL conformance runner
 
 Usage: pnpm conformance [options]
 
-  --suite <name[,name]>       encoding, exact, security, retrieval, portability, or all
+  --suite <name[,name]>       encoding, exact, security, retrieval, portability, receipts, or all
   --tier <fast|exhaustive>    security cases: 256/matrix or all 20,000/matrix
   --adapter <sqlite|postgres|both>
   --seed <8hex:caseIndex>     replay one security case exactly
@@ -213,8 +214,8 @@ async function run(options: CliOptions): Promise<number> {
     suites.push(retrieval.report);
     retrievalMeasurements = retrieval.measurements;
   }
-  const deferred = await deferredReceiptCoverage(corpusRoot);
-  const report = createConformanceReport(suites, [deferred]);
+  if (options.suites.has('receipts')) suites.push(await runReceiptSuite(corpusRoot));
+  const report = createConformanceReport(suites);
   if (options.json) {
     process.stdout.write(`${canonicalizeJcs({
       report,
