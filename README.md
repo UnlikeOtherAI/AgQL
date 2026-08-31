@@ -68,6 +68,11 @@ the acceptance gates in RFC §12 are what "v0" will mean, and they are
 deliberately falsifiable: if the reference implementation cannot pass them, the
 contract has not earned its complexity.
 
+## Deployment
+
+Docker, PostgreSQL, Caddy, operations, verification, rollback, and teardown
+instructions are in [deploy/README.md](deploy/README.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE). A contract that isn't freely implementable isn't a

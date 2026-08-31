@@ -1,0 +1,52 @@
+services:
+  agql-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      agql-postgres:
+        condition: service_healthy
+    networks:
+      - edge
+      - db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "const http=require('node:http');const request=http.get('http://127.0.0.1:8787/health',(response)=>process.exit(response.statusCode===200?0:1));request.on('error',()=>process.exit(1));request.setTimeout(3000,()=>{request.destroy();process.exit(1)});"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  agql-postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in deploy/.env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in deploy/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - agql-postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  agql-postgres-data:
+
+networks:
+  edge:
+    external: true
+  db:
+    internal: true
