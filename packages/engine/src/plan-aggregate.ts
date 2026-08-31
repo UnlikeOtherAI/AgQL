@@ -384,7 +384,7 @@ export function buildAggregatePlan(
       );
       if (!allowed.ok) return allowed;
     }
-    order.push({ output: meta.output, direction: item.dir, nulls: item.nulls });
+    order.push({ output: meta.output, direction: item.dir });
   }
   const firstOrder = order[0];
   if (firstOrder === undefined) {

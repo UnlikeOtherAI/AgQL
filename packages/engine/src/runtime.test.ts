@@ -286,7 +286,7 @@ test('aggregate result assembly releases calendar-period dimensions and their nu
       id: 'week',
     }],
     metrics: [{ kind: 'aggregate', op: 'count', id: 'count' }],
-    order: [{ by: 'week', dir: 'asc', nulls: 'last' }],
+    order: [{ by: 'week', dir: 'asc' }],
     take: 10,
   })));
   const period = {

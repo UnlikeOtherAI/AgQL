@@ -119,7 +119,7 @@ function query(): QueryDocument {
     mode: 'records',
     from: 'notes',
     select: ['id'],
-    order: [{ by: 'id', dir: 'asc', nulls: 'last' }],
+    order: [{ by: 'id', dir: 'asc' }],
     take: SafeIntegerSchema.parse(1),
   };
 }
@@ -321,7 +321,7 @@ query:
   from: notes
   select: [id]
   order:
-    - { by: id, dir: asc, nulls: last }
+    - { by: id, dir: asc }
   take: 1
 `;
   const yamlResult = await responsePayload(await httpHandler(new Request(

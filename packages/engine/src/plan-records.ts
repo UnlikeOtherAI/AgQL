@@ -64,13 +64,13 @@ export function buildRecordsPlan(
   for (const [index, item] of query.order.entries()) {
     const field = authorizedField(context, item.by, 'order', `/order/${index}/by`);
     if (!field.ok) return field;
-    order.push({ field: field.value, direction: item.dir, nulls: item.nulls });
+    order.push({ field: field.value, direction: item.dir });
   }
   const id = authorizedField(context, context.dataset.idField, 'order', '/from');
   if (!id.ok) return id;
   const final = order.at(-1);
   if (final?.field.logicalId !== context.dataset.idField) {
-    order.push({ field: id.value, direction: 'asc', nulls: 'last' });
+    order.push({ field: id.value, direction: 'asc' });
   }
   const finalOrder = order.at(-1);
   if (finalOrder === undefined) {

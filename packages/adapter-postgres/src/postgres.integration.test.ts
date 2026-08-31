@@ -299,10 +299,10 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
           { output: { logicalId: 'id', slot: safe(0) }, field: idField },
           { output: { logicalId: 'body', slot: safe(1) }, field: bodyField },
         ],
-        order: [{ field: idField, direction: 'asc', nulls: 'last' }],
+        order: [{ field: idField, direction: 'asc' }],
         tieBreak: {
           kind: 'recordId',
-          order: { field: idField, direction: 'asc', nulls: 'last' },
+          order: { field: idField, direction: 'asc' },
         },
       };
       const recordsResult = success(

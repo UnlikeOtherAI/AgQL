@@ -272,6 +272,6 @@ export const recordsQuery = {
     op: 'inPrevious',
     unit: 'week',
   },
-  order: [{ by: 'docs.title', dir: 'asc', nulls: 'last' }],
+  order: [{ by: 'docs.title', dir: 'asc' }],
   take: 10,
 } as const;

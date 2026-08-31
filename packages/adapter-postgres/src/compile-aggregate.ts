@@ -267,7 +267,7 @@ export function compileAggregate(
         throw new SqlCompilationError('An ordered output slot is not defined.', '/order');
       }
       return `g.${internalColumn(item.output.slot)} ${item.direction.toUpperCase()} `
-        + `NULLS ${item.nulls.toUpperCase()}`;
+        + 'NULLS LAST';
     });
     if (plan.tieBreak.kind === 'dimensionTuple') {
       for (const field of plan.tieBreak.fields) {

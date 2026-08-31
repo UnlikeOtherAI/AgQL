@@ -46,8 +46,7 @@ function compareOutput(
     const leftNull = leftValue.kind === 'null';
     const rightNull = rightValue.kind === 'null';
     if (leftNull !== rightNull) {
-      const nullFirst = order.nulls === 'first';
-      return leftNull === nullFirst ? -1 : 1;
+      return leftNull ? 1 : -1;
     }
     if (!leftNull) {
       const comparison = compareOutputValue(leftValue, rightValue);

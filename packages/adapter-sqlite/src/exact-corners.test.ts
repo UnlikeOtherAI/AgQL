@@ -133,10 +133,10 @@ function recordsPlan(
     mode: 'records',
     profile: 'records.v0',
     projection: [{ output: { logicalId: 'id', slot: safe(0) }, field: idField }],
-    order: [{ field: amountField, direction: 'asc', nulls: 'last' }],
+    order: [{ field: amountField, direction: 'asc' }],
     tieBreak: {
       kind: 'recordId',
-      order: { field: idField, direction: 'asc', nulls: 'last' },
+      order: { field: idField, direction: 'asc' },
     },
   };
 }
@@ -363,7 +363,7 @@ test('count-only aggregates compile and whole-record replacement clears derived 
         output: { logicalId: 'count', slot: safe(0) },
         aggregate: { op: 'count' },
       }],
-      order: [{ output: { logicalId: 'count', slot: safe(0) }, direction: 'asc', nulls: 'last' }],
+      order: [{ output: { logicalId: 'count', slot: safe(0) }, direction: 'asc' }],
       tieBreak: { kind: 'singleAggregateRow' },
     };
     const counted = success(await sqlite.query.execute(
@@ -455,7 +455,7 @@ test('integer aggregation remains exact across unsafe intermediate mathematical 
         output: { logicalId: 'sum', slot: safe(0) },
         aggregate: { op: 'sum', field: quantity },
       }],
-      order: [{ output: { logicalId: 'sum', slot: safe(0) }, direction: 'asc', nulls: 'last' }],
+      order: [{ output: { logicalId: 'sum', slot: safe(0) }, direction: 'asc' }],
       tieBreak: { kind: 'singleAggregateRow' },
     };
     const result = success(await adapter(temporary.path).query.execute(

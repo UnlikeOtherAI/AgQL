@@ -78,7 +78,6 @@ function plan(): LogicalPlanForProfile<'aggregate.v0'> {
     order: [{
       output: { logicalId: 'average', slot: safe(0) },
       direction: 'asc',
-      nulls: 'last',
     }],
     tieBreak: { kind: 'singleAggregateRow' },
   };

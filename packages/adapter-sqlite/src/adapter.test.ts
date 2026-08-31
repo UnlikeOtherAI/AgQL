@@ -128,10 +128,10 @@ function recordsPlan(tenant: 'north' | 'south'): LogicalPlanForProfile<'records.
       { output: { logicalId: 'amount', slot: safe(1) }, field: amountField },
       { output: { logicalId: 'tenant', slot: safe(2) }, field: tenantField },
     ],
-    order: [{ field: amountField, direction: 'asc', nulls: 'last' }],
+    order: [{ field: amountField, direction: 'asc' }],
     tieBreak: {
       kind: 'recordId',
-      order: { field: idField, direction: 'asc', nulls: 'last' },
+      order: { field: idField, direction: 'asc' },
     },
   };
 }
@@ -173,7 +173,7 @@ function aggregatePlan(): LogicalPlanForProfile<'aggregate.v0'> {
         aggregate: { op: 'count' },
       },
     ],
-    order: [{ output: { logicalId: 'tenant', slot: safe(0) }, direction: 'asc', nulls: 'last' }],
+    order: [{ output: { logicalId: 'tenant', slot: safe(0) }, direction: 'asc' }],
     tieBreak: { kind: 'dimensionTuple', fields: [tenantField] },
   };
 }
@@ -196,7 +196,7 @@ function calendarAggregatePlan(): LogicalPlanForProfile<'aggregate.v0'> {
       output: { logicalId: 'count', slot: safe(1) },
       aggregate: { op: 'count' },
     }],
-    order: [{ output: { logicalId: 'week', slot: safe(0) }, direction: 'asc', nulls: 'last' }],
+    order: [{ output: { logicalId: 'week', slot: safe(0) }, direction: 'asc' }],
     tieBreak: { kind: 'dimensionTuple', fields: [instantField] },
   };
 }

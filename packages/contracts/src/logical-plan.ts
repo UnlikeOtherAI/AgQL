@@ -125,7 +125,6 @@ export type ExpandedScope =
 export interface ResolvedOrder {
   readonly field: ResolvedFieldBinding;
   readonly direction: 'asc' | 'desc';
-  readonly nulls: 'first' | 'last';
 }
 
 export type StableTieBreak =
@@ -207,7 +206,6 @@ export interface ResolvedOutputPredicate {
 export interface ResolvedOutputOrder {
   readonly output: ResolvedOutputBinding;
   readonly direction: 'asc' | 'desc';
-  readonly nulls: 'first' | 'last';
 }
 
 export interface AggregateLogicalPlan extends LogicalPlanBase {

@@ -56,7 +56,7 @@ test('hidden and nonexistent references have byte-identical refusal shapes', () 
     mode: 'records',
     from: 'docs',
     select: [field],
-    order: [{ by: 'docs.id', dir: 'asc', nulls: 'last' }],
+    order: [{ by: 'docs.id', dir: 'asc' }],
     take: 1,
   });
   const hidden = compileQuery(compileInput(query('docs.secret')));
@@ -138,7 +138,7 @@ test('aggregate plans resolve ids, filters, ratio null semantics, and dimension 
       amount: '0',
       currency: 'USD',
     } },
-    order: [{ by: 'total', dir: 'desc', nulls: 'last' }],
+    order: [{ by: 'total', dir: 'desc' }],
     take: 20,
   })));
   assert.equal(result.plan.mode, 'aggregate');
@@ -161,7 +161,7 @@ test('prototype-style aggregate aliases and output collisions are refused', () =
     from: 'docs',
     dimensions: [],
     metrics: [{ kind: 'aggregate', op: 'count', id: '__proto__' }],
-    order: [{ by: '__proto__', dir: 'asc', nulls: 'last' }],
+    order: [{ by: '__proto__', dir: 'asc' }],
     take: 1,
   }));
   assert.equal(firstError(result)?.code, 'SEMANTIC_INVALID');
@@ -271,7 +271,7 @@ test('field policy is enforced independently for every operation surface', () =>
     },
     {
       ...recordsQuery,
-      order: [{ by: 'docs.secret', dir: 'asc', nulls: 'last' }],
+      order: [{ by: 'docs.secret', dir: 'asc' }],
     },
     {
       version: '0',
@@ -279,7 +279,7 @@ test('field policy is enforced independently for every operation surface', () =>
       from: 'docs',
       dimensions: [{ kind: 'field', field: 'docs.secret', id: 'secret' }],
       metrics: [{ kind: 'aggregate', op: 'count', id: 'count' }],
-      order: [{ by: 'count', dir: 'asc', nulls: 'last' }],
+      order: [{ by: 'count', dir: 'asc' }],
       take: 1,
     },
     {
@@ -293,7 +293,7 @@ test('field policy is enforced independently for every operation surface', () =>
         field: 'docs.secret',
         id: 'secretCount',
       }],
-      order: [{ by: 'secretCount', dir: 'asc', nulls: 'last' }],
+      order: [{ by: 'secretCount', dir: 'asc' }],
       take: 1,
     },
     {

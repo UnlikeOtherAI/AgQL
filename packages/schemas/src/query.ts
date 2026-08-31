@@ -151,7 +151,6 @@ export const AfterWriteSchema = z.object({
 const OrderSchema = z.object({
   by: ReferenceSchema,
   dir: z.enum(['asc', 'desc']),
-  nulls: z.enum(['first', 'last']),
 }).strict();
 
 const QueryBaseShape = {

@@ -31,7 +31,7 @@ test('deferred constructs refuse with UNSUPPORTED after all structural errors', 
     mode: 'records',
     from: 'orders',
     select: ['orders.id'],
-    order: [{ by: 'orders.id', dir: 'asc', nulls: 'last' }],
+    order: [{ by: 'orders.id', dir: 'asc' }],
     take: 10,
     join: { from: 'customers' },
   });
@@ -48,7 +48,7 @@ test('a deferred construct in an otherwise valid query has one typed refusal', (
     mode: 'records',
     from: 'orders',
     select: ['orders.id'],
-    order: [{ by: 'orders.id', dir: 'asc', nulls: 'last' }],
+    order: [{ by: 'orders.id', dir: 'asc' }],
     take: 10,
     derive: [],
   });
