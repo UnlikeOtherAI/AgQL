@@ -1234,3 +1234,59 @@ members remain null until the first cross-adapter results exist. This is a
 measurement dependency, not permission for implementations to choose different
 hidden thresholds. Runtime “small” latency is likewise an empirical acceptance
 claim, not a query semantic or adapter-selected constant.
+
+## 13. Reference server HTTP bindings
+
+The language contract is transport-independent. This section fixes the public
+bindings implemented by the v0 reference server; a server conforming to a
+different transport binding MUST preserve the same operation identities,
+authorization, envelopes, and refusal semantics.
+
+`GET /health` is liveness only and does not contact the database. `GET /ready`
+is the deployment readiness gate: it verifies the database connection,
+`SET ROLE agql_query`, and `SELECT 1`; an unavailable schema or role MUST return
+a non-200 response.
+
+### 13.1 MCP HTTP binding
+
+`POST /mcp` is a custom stateless binding. It is not a standard MCP session
+binding: `initialize` is unsupported and returns JSON-RPC `-32601` with HTTP
+404, there is no session identifier, and notifications are invalid because all
+requests require a string or numeric JSON-RPC `id`.
+
+The complete method set is `server/discover`, `tools/list`, `resources/list`,
+`resources/read`, and `tools/call`. Every request uses
+`Content-Type: application/json` and carries these headers:
+
+| Header | Requirement |
+|---|---|
+| `Authorization` | A deployment-authorized bearer credential. |
+| `AgQL-Anchor` | An explicit canonical UTC instant. |
+| `Mcp-Method` | Exactly the JSON-RPC `method` in this body. |
+| `Mcp-Protocol-Version` | Exactly `params._meta["io.modelcontextprotocol/protocolVersion"]`. |
+| `Mcp-Name` | For `tools/call`, exactly `params.name`; for `resources/read`, exactly `params.uri`. |
+
+`params._meta` MUST contain both
+`io.modelcontextprotocol/protocolVersion` and
+`io.modelcontextprotocol/clientCapabilities`. The routing headers MUST match the
+specific body on every request; a client cannot use one static set of routing
+headers for different methods, versions, tool names, or resource URIs.
+
+### 13.2 Direct HTTP data plane
+
+Agent data-plane routes require the same bearer authorization and explicit
+anchor as MCP. Principal-result routes require separately configured principal
+authentication and MUST NOT accept the agent bearer credential as a substitute.
+
+| Method | Path | Operation | State change |
+|---|---|---|---|
+| `POST` | `/v0/catalog/search` | Catalog search | No |
+| `POST` | `/v0/catalog/describe` | Catalog description | No |
+| `POST` | `/v0/catalog/values` | Catalog value lookup | No |
+| `POST` | `/v0/query/explain` | Query explanation | No |
+| `POST` | `/v0/query/run` | Query execution | No |
+| `POST` | `/v0/records` | Canonical record ingestion | Yes |
+| `POST` | `/v0/queries` | Verified query persistence | Yes |
+| `POST` | `/v0/principal-results` | Open principal result handle | No |
+| `GET` | `/v0/principal-results/{handle}` | Principal result page | No |
+| `GET` | `/v0/principal-results/{handle}/stream` | Principal result NDJSON stream | No |

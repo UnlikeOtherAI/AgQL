@@ -40,6 +40,48 @@ is read-only and incapable of writes by construction, while **Ingest** is a
 separate, tiny, idempotent contract. Agents do need to remember things — but
 "easy storage" must never mean an update language inside the query language.
 
+## Public MCP binding
+
+The public `/mcp` endpoint is a **custom stateless HTTP binding**, not a
+standard MCP session endpoint. Standard-client `initialize` is unsupported and
+returns JSON-RPC `-32601` with HTTP 404; notifications are unsupported because
+every request must carry a string or numeric `id`. The supported method set is
+`server/discover`, `tools/list`, `resources/list`, `resources/read`, and
+`tools/call`.
+
+Every `POST /mcp` request needs `Authorization: Bearer …`, an explicit canonical
+UTC `AgQL-Anchor`, and an `_meta` object containing both
+`io.modelcontextprotocol/protocolVersion` and
+`io.modelcontextprotocol/clientCapabilities`. The routing headers are
+per-request, never a static client configuration:
+
+- `Mcp-Method` must equal the JSON-RPC `method`.
+- `Mcp-Protocol-Version` must equal
+  `params._meta["io.modelcontextprotocol/protocolVersion"]`.
+- `Mcp-Name` must equal `params.name` for `tools/call`, or `params.uri` for
+  `resources/read`.
+
+The exact header/body match is enforced on every call. For a working deployed
+example, set `app_key` to a valid bearer key and run this `run_query` request;
+the starter deployment returns project rows:
+
+```sh
+app_key='replace-with-a-valid-bearer-key'
+curl --fail --silent --show-error \
+  -X POST https://agql.unlikeotherai.com/mcp \
+  -H "Authorization: Bearer ${app_key}" \
+  -H 'AgQL-Anchor: 2026-01-01T00:00:00Z' \
+  -H 'Content-Type: application/json' \
+  -H 'Mcp-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: tools/call' \
+  -H 'Mcp-Name: run_query' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_query","arguments":{"source":"default","query":{"version":"0","mode":"records","from":"projects","select":["projects.id","projects.name"],"order":[{"by":"projects.id","dir":"asc"}],"take":3}},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
+```
+
+The [deployment runbook](deploy/README.md#http-data-plane-routes-and-write-controls)
+lists the direct `/v0` routes, including the two write paths and an optional
+Caddy edge matcher to block them.
+
 ## The surfaces
 
 ```

@@ -29,8 +29,8 @@ RUN pnpm build
 
 FROM builder AS production-deps
 
-# Retain compiled artifacts while removing development-only dependencies before
-# copying the workspace into the runtime image.
+# Keep only production dependencies. The TypeScript project intentionally emits
+# no JavaScript, so the runtime executes the source with tsx.
 RUN pnpm install --prod --frozen-lockfile
 
 FROM node:24-slim AS runtime
@@ -51,6 +51,6 @@ USER agql
 EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=5 \
-  CMD node -e "const http=require('node:http');const request=http.get('http://127.0.0.1:8787/health',(response)=>process.exit(response.statusCode===200?0:1));request.on('error',()=>process.exit(1));request.setTimeout(3000,()=>{request.destroy();process.exit(1)});"
+  CMD node -e "const http=require('node:http');const request=http.get('http://127.0.0.1:8787/ready',(response)=>process.exit(response.statusCode===200?0:1));request.on('error',()=>process.exit(1));request.setTimeout(3000,()=>{request.destroy();process.exit(1)});"
 
 CMD ["pnpm", "start"]

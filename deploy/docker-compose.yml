@@ -6,6 +6,8 @@ services:
       context: ..
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Keep V8's old-space cap below this cgroup limit (see NODE_OPTIONS in .env).
+    mem_limit: 512m
     env_file:
       - .env
     depends_on:
@@ -18,14 +20,20 @@ services:
       test:
         - CMD-SHELL
         - >-
-          node -e "const http=require('node:http');const request=http.get('http://127.0.0.1:8787/health',(response)=>process.exit(response.statusCode===200?0:1));request.on('error',()=>process.exit(1));request.setTimeout(3000,()=>{request.destroy();process.exit(1)});"
+          node -e "const http=require('node:http');const request=http.get('http://127.0.0.1:8787/ready',(response)=>process.exit(response.statusCode===200?0:1));request.on('error',()=>process.exit(1));request.setTimeout(3000,()=>{request.destroy();process.exit(1)});"
       interval: 30s
       timeout: 5s
       start_period: 15s
       retries: 5
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
 
   agql-postgres:
-    image: pgvector/pgvector:pg16
+    # pgvector:pg16 multi-platform image index, resolved and pinned on 2026-08-31.
+    image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in deploy/.env}
@@ -43,6 +51,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
 
 volumes:
   agql-postgres-data:
