@@ -1,0 +1,29 @@
+{
+  "name": "@agql/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "bin": {
+    "agql-server": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "seed": "tsx src/seed.ts",
+    "test": "tsx --test 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@agql/adapter-postgres": "workspace:*",
+    "@agql/catalog": "workspace:*",
+    "@agql/contracts": "workspace:*",
+    "@agql/engine": "workspace:*",
+    "@agql/http": "workspace:*",
+    "@agql/mcp": "workspace:*",
+    "@agql/schemas": "workspace:*",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.5"
+  }
+}

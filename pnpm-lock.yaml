@@ -192,6 +192,40 @@ importers:
         specifier: ^4.20.5
         version: 4.23.13
 
+  packages/server:
+    dependencies:
+      '@agql/adapter-postgres':
+        specifier: workspace:*
+        version: link:../adapter-postgres
+      '@agql/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      '@agql/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@agql/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@agql/http':
+        specifier: workspace:*
+        version: link:../http
+      '@agql/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@agql/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      pg:
+        specifier: ^8.16.3
+        version: 8.23.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.15.5
+        version: 8.23.1
+      tsx:
+        specifier: ^4.20.5
+        version: 4.23.13
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':

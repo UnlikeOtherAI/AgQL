@@ -1,0 +1,7 @@
+{"dataset":"projects","id":"project-atlas","value":{"id":"project-atlas","name":"Atlas migration","summary":"Move the reporting workload to the governed platform with a measured cutover plan."}}
+{"dataset":"projects","id":"project-beacon","value":{"id":"project-beacon","name":"Beacon onboarding","summary":"Create a clear onboarding path that helps new teams reach their first useful result."}}
+{"dataset":"projects","id":"project-cirrus","value":{"id":"project-cirrus","name":"Cirrus reliability","summary":"Reduce recurring deployment interruptions by documenting ownership and recovery checks."}}
+{"dataset":"tasks","id":"task-atlas-1","value":{"id":"task-atlas-1","projectId":"project-atlas","title":"Confirm reporting cutover owners"}}
+{"dataset":"tasks","id":"task-atlas-2","value":{"id":"task-atlas-2","projectId":"project-atlas","title":"Review reconciliation checklist"}}
+{"dataset":"tasks","id":"task-beacon-1","value":{"id":"task-beacon-1","projectId":"project-beacon","title":"Draft first-result guidance"}}
+{"dataset":"tasks","id":"task-cirrus-1","value":{"id":"task-cirrus-1","projectId":"project-cirrus","title":"Capture restart runbook findings"}}
