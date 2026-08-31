@@ -151,7 +151,6 @@ export const AfterWriteSchema = z.object({
 const OrderSchema = z.object({
   by: ReferenceSchema,
   dir: z.enum(['asc', 'desc']),
-  nulls: z.enum(['first', 'last']),
 }).strict();
 
 const QueryBaseShape = {
@@ -190,22 +189,15 @@ const AggregateFilterShape = {
 };
 
 const CountAggregateSchema = z.object({
-  kind: z.literal('aggregate'),
   op: z.literal('count'),
   ...AggregateFilterShape,
 }).strict();
 
 const FieldAggregateSchema = z.object({
-  kind: z.literal('aggregate'),
   op: z.enum(['countDistinct', 'sum', 'avg', 'min', 'max']),
   field: ReferenceSchema,
   ...AggregateFilterShape,
 }).strict();
-
-export const AggregateExpressionSchema = z.discriminatedUnion('op', [
-  CountAggregateSchema,
-  FieldAggregateSchema,
-]);
 
 const NamedAggregateMetricSchema = z.union([
   CountAggregateSchema.extend({ id: OutputIdSchema }),
@@ -213,9 +205,9 @@ const NamedAggregateMetricSchema = z.union([
 ]);
 
 const RatioMetricSchema = z.object({
-  kind: z.literal('ratio'),
-  numerator: AggregateExpressionSchema,
-  denominator: AggregateExpressionSchema,
+  op: z.literal('ratio'),
+  numerator: ReferenceSchema,
+  denominator: ReferenceSchema,
   id: OutputIdSchema,
 }).strict();
 
@@ -227,7 +219,13 @@ export const AggregateQuerySchema = z.object({
     TimeDimensionSchema,
   ])),
   metrics: z.array(z.union([NamedAggregateMetricSchema, RatioMetricSchema])).min(1),
-  having: WhereExpressionSchema.optional(),
+  having: z.preprocess((value) => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+    const source = value as Record<string, unknown>;
+    if (typeof source.metric !== 'string' || source.field !== undefined) return value;
+    const { metric, ...remaining } = source;
+    return { ...remaining, field: metric };
+  }, WhereExpressionSchema).optional(),
   order: z.array(OrderSchema).min(1),
   take: z.number().int().safe().positive().max(QUERY_LIMITS.take.aggregate).transform(
     (value) => SafeIntegerSchema.parse(value),

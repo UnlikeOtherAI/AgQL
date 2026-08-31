@@ -51,6 +51,6 @@ export function repairableError(
   return { code, message, path, alternatives, remedy };
 }
 
-export function unavailableReference(path: string): EngineError {
-  return referenceNotAvailable(path);
+export function unavailableReference(path: string, alternatives?: readonly string[]): EngineError {
+  return referenceNotAvailable(path, alternatives);
 }

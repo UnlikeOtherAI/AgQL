@@ -26,11 +26,15 @@ const UNSUPPORTED_PROPERTIES: ReadonlySet<string> = new Set([
   'rerank',
   'multiVector',
   'materializedDataset',
+  'materialize',
   'artifact',
   'publication',
+  'publish',
   'federation',
   'attenuableCredential',
+  'credential',
   'differentialPrivacy',
+  'privacy',
   'derivedPolicyPropagation',
 ]);
 
@@ -70,7 +74,12 @@ function findUnsupported(
     const itemPath = [...path, key];
     if (UNSUPPORTED_PROPERTIES.has(key)) return { name: key, path: itemPath, property: key };
     if (key === 'op' && item === 'percentile') return { name: 'percentile', path: itemPath };
-    if (key === 'mode' && item === 'merge') return { name: 'merge', path: itemPath };
+    if (key === 'mode' && (item === 'merge' || item === 'artifact')) {
+      return { name: String(item), path: itemPath };
+    }
+    if ((key === 'from' || key === 'using') && Array.isArray(item)) {
+      return { name: key === 'from' ? 'federation' : 'multi-vector', path: itemPath };
+    }
     if (key === 'kind' && typeof item === 'string' && UNSUPPORTED_KINDS.has(item)) {
       return { name: item, path: itemPath };
     }
@@ -90,10 +99,45 @@ function issueBelongsToUnsupported(issue: z.ZodIssue, hit: UnsupportedHit): bool
 function unsupportedError(hit: UnsupportedHit): AgqlError {
   return {
     code: 'UNSUPPORTED_IN_V0',
-    message: `The ${hit.name} construct is not supported in AgQL v0.`,
+    message: 'This construct is reserved and unsupported in AgQL v0.',
     path: jsonPointer(hit.path),
-    alternatives: ['Remove the deferred construct and use only the documented v0 vocabulary.'],
+    alternatives: ['Remove the construct.'],
   };
+}
+
+function forbiddenError(value: unknown): AgqlError | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  if (source.rawSql !== undefined || source.rawPipeline !== undefined) return {
+    code: 'NATIVE_PASSTHROUGH_FORBIDDEN',
+    message: 'Native backend query passthrough is forbidden.',
+    path: source.rawSql !== undefined ? '/rawSql' : '/rawPipeline',
+    alternatives: ['Remove the native-query member.'],
+  };
+  if (source.mode === 'delete' || source.mode === 'insert' || source.mode === 'update') return {
+    code: 'QUERY_WRITE_FORBIDDEN',
+    message: 'The AgQL Query Core cannot perform writes.',
+    path: '/mode',
+    alternatives: ['Use the separate Ingest contract.'],
+  };
+  const where = source.where;
+  if (where !== null && typeof where === 'object' && !Array.isArray(where)) {
+    const predicate = where as Record<string, unknown>;
+    if (predicate.op === 'regex') return {
+      code: 'REGEX_FORBIDDEN', message: 'Regular-expression predicates are forbidden in AgQL v0.',
+      path: '/where/op', alternatives: ['Use contains or startsWith.'],
+    };
+    if (predicate.kind === 'udf') return {
+      code: 'UDF_FORBIDDEN', message: 'User-defined functions are forbidden in AgQL v0.',
+      path: '/where/kind', alternatives: ['Use a closed AgQL v0 predicate.'],
+    };
+    if (predicate.kind === 'expression') return {
+      code: 'EVALUABLE_CONSTRUCT_FORBIDDEN',
+      message: 'Evaluable expressions are forbidden in AgQL v0.',
+      path: '/where/kind', alternatives: ['Use a closed AgQL v0 predicate.'],
+    };
+  }
+  return undefined;
 }
 
 function rejectedWithStructuralAndUnsupported(
@@ -108,12 +152,12 @@ function rejectedWithStructuralAndUnsupported(
 }
 
 export function validateQueryDocument(value: unknown): ValidationResult<QueryDocument> {
+  const forbidden = forbiddenError(value);
+  if (forbidden !== undefined) return { ok: false, errors: [forbidden] };
   const unsupported = findUnsupported(value);
   const parsed = QueryDocumentSchema.safeParse(value);
   if (parsed.success) return { ok: true, value: parsed.data };
-  if (unsupported !== undefined) {
-    return rejectedWithStructuralAndUnsupported(parsed.error, unsupported);
-  }
+  if (unsupported !== undefined) return { ok: false, errors: [unsupportedError(unsupported)] };
   return { ok: false, errors: structuralErrors(parsed.error) };
 }
 
@@ -148,4 +192,3 @@ export function validateAndCanonicalizeQuery(
     },
   };
 }
-

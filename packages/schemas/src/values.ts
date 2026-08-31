@@ -28,7 +28,7 @@ export interface MoneyValue<C extends CurrencyCode = CurrencyCode> {
   readonly currency: C;
 }
 
-const CANONICAL_DECIMAL = /^(?!-0$)-?(?:0|[1-9]\d*)(?:\.\d*[1-9])?$/u;
+const DECIMAL_INPUT = /^[+-]?(?:0|[0-9]+)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/u;
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/u;
 const INSTANT =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?Z$/u;
@@ -69,19 +69,22 @@ function validDateParts(year: string, month: string, day: string): boolean {
     && numericDay >= 1 && numericDay <= daysInMonth(numericYear, numericMonth);
 }
 
-export const CanonicalDecimalSchema = z.string().regex(CANONICAL_DECIMAL).transform(
-  (value): CanonicalDecimal => value as CanonicalDecimal,
-);
+export const CanonicalDecimalSchema = z.string().regex(DECIMAL_INPUT).refine((value) => {
+  const decimal = new Decimal(value);
+  return decimal.isFinite() && decimal.decimalPlaces() <= 38 && decimal.precision(true) <= 38;
+}, 'Decimal exceeds the v0 precision or scale bound.').transform((value) => {
+  const decimal = new Decimal(value);
+  return decimal.isZero() ? '0' as CanonicalDecimal : decimal.toFixed() as CanonicalDecimal;
+});
 
 export const CurrencyCodeSchema = z.enum(ISO_4217_CODES).refine(
   (value) => CURRENCY_CODES.has(value),
   'Currency must be an assigned ISO-4217 alphabetic code.',
 ).transform((value): CurrencyCode => value as CurrencyCode);
 
-export const NormalizedTextSchema = z.string().refine(
-  (value) => value === value.normalize('NFC'),
-  'Text must use Unicode NFC normalization.',
-).transform((value): NormalizedText => value as NormalizedText);
+export const NormalizedTextSchema = z.string().transform(
+  (value): NormalizedText => value.normalize('NFC') as NormalizedText,
+);
 
 export const DateValueSchema = z.string().refine((value) => {
   const match = DATE.exec(value);

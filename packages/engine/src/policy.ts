@@ -46,13 +46,26 @@ export function authorizedField(
   operation: FieldOperation,
   path: string,
 ): EngineResult<ResolvedFieldBinding> {
-  const resolved = boundField(context, fieldId, path);
-  if (!resolved.ok) return resolved;
+  const document = context.dataset.fields[fieldId];
+  const physical = context.binding.fields[fieldId];
   const policy = context.dataset.fieldPolicies[fieldId];
-  if (policy === undefined) return fail(unavailableReference(path));
+  const available = Object.entries(context.dataset.fields)
+    .filter(([id]) => {
+      const candidate = context.dataset.fieldPolicies[id];
+      return candidate !== undefined
+        && context.binding.fields[id] !== undefined
+        && accessRuleAllows(
+          operationRule(candidate, operation)[context.input.channel], context.scope,
+        );
+    })
+    .map(([id]) => id)
+    .sort();
+  if (document === undefined || physical === undefined || policy === undefined) {
+    return fail(unavailableReference(path, available));
+  }
   const access = operationRule(policy, operation)[context.input.channel];
-  if (!accessRuleAllows(access, context.scope)) return fail(unavailableReference(path));
-  return resolved;
+  if (!accessRuleAllows(access, context.scope)) return fail(unavailableReference(path, available));
+  return { ok: true, value: resolveFieldBinding(fieldId, document, physical) };
 }
 
 interface AuthorizedEmbedding {

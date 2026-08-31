@@ -74,14 +74,14 @@ test('validated JSON and YAML edges produce one canonical source query identity'
     mode: 'records',
     from: 'orders',
     select: ['orders.id'],
-    order: [{ by: 'orders.id', dir: 'asc', nulls: 'last' }],
+    order: [{ by: 'orders.id', dir: 'asc' }],
     take: 10,
   }));
   const yaml = decodeAgqlYaml(`version: "0"
 mode: records
 from: orders
 select: [orders.id]
-order: [{by: orders.id, dir: asc, nulls: last}]
+order: [{by: orders.id, dir: asc}]
 take: 10`);
   assert.equal(json.ok, true);
   assert.equal(yaml.ok, true);

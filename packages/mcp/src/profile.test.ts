@@ -127,7 +127,7 @@ function query(): QueryDocument {
     mode: 'records',
     from: 'notes',
     select: ['id'],
-    order: [{ by: 'id', dir: 'asc', nulls: 'last' }],
+    order: [{ by: 'id', dir: 'asc' }],
     take: SafeIntegerSchema.parse(1),
   };
 }

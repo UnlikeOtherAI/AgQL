@@ -9,7 +9,7 @@ import {
   RetrieveQuerySchema,
 } from './index.ts';
 
-const order = [{ by: 'orders.id', dir: 'asc', nulls: 'last' }] as const;
+const order = [{ by: 'orders.id', dir: 'asc' }] as const;
 
 test('the three closed query modes accept their RFC v0 shapes', () => {
   assert.equal(RecordsQuerySchema.safeParse({
@@ -25,8 +25,8 @@ test('the three closed query modes accept their RFC v0 shapes', () => {
     mode: 'aggregate',
     from: 'orders',
     dimensions: [{ kind: 'field', field: 'orders.channel', id: 'channel' }],
-    metrics: [{ kind: 'aggregate', op: 'count', id: 'orders' }],
-    order: [{ by: 'channel', dir: 'asc', nulls: 'last' }],
+    metrics: [{ op: 'count', id: 'orders' }],
+    order: [{ by: 'channel', dir: 'asc' }],
     take: 10,
   }).success, true);
   assert.equal(RetrieveQuerySchema.safeParse({
@@ -94,4 +94,3 @@ test('ingest is a separate closed contract with whole records only', () => {
     idempotencyKey: 'task:two',
   }).success, false);
 });
-

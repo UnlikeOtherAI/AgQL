@@ -385,7 +385,7 @@ export function executeAggregate(
   });
   try {
     const raw = values(database, compiled.sql, compiled.parameters);
-    if (raw.length >= compiled.plan.hardRowLimit) {
+    if (raw.length > compiled.plan.hardRowLimit) {
       return {
         kind: 'refusal',
         refusal: {

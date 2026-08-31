@@ -21,7 +21,7 @@ function orderExpression(
     throw new SqlCompilationError('An order field is not part of the dataset binding.', '/order');
   }
   const expression = fieldExpression({ registry, dataset, alias: 'd' }, order.field);
-  return `${expression} ${order.direction.toUpperCase()} NULLS ${order.nulls.toUpperCase()}`;
+  return `${expression} ${order.direction.toUpperCase()} NULLS LAST`;
 }
 
 export function compileRecords(

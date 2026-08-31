@@ -87,9 +87,7 @@ function uniqueFields(fields: readonly ResolvedFieldBinding[]): readonly Resolve
 
 function orderTerms(order: ResolvedOrder): readonly string[] {
   const column = quoteIdentifier(order.field.physical);
-  const nullValue = order.nulls === 'first' ? 0 : 1;
-  const nonNullValue = order.nulls === 'first' ? 1 : 0;
-  const nullTerm = `CASE WHEN ${column} IS NULL THEN ${nullValue} ELSE ${nonNullValue} END ASC`;
+  const nullTerm = `CASE WHEN ${column} IS NULL THEN 1 ELSE 0 END ASC`;
   if (order.field.type.kind === 'decimal') {
     return [nullTerm, decimalOrderSql(column, order.direction)];
   }
@@ -115,7 +113,7 @@ function recordsCompilation(
   plan: LogicalPlanForProfile<'records.v0'>,
   options: SqliteAdapterOptions,
 ): AdapterOutcome<CompiledRecordsQuery> {
-  if (plan.take >= plan.hardRowLimit) {
+  if (plan.take > plan.hardRowLimit) {
     return refusal(
       'COST_GATE_REFUSAL',
       'Records execution needs one bounded row beyond take to report truncation honestly.',

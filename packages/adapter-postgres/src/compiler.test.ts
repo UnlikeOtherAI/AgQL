@@ -231,10 +231,10 @@ test('records SQL contains only quoted physical identifiers and bound model scal
       output: { logicalId: '__proto__; DROP TABLE x', slot: safe(0) },
       field: bodyField,
     }],
-    order: [{ field: bodyField, direction: 'asc', nulls: 'last' }],
+    order: [{ field: bodyField, direction: 'asc' }],
     tieBreak: {
       kind: 'recordId',
-      order: { field: idField, direction: 'asc', nulls: 'last' },
+      order: { field: idField, direction: 'asc' },
     },
   };
   const compiled = success(compileQuery(plan, registry));
@@ -265,7 +265,6 @@ test('aggregate SQL repeats group expressions and keeps numerics out of float8',
     order: [{
       output: { logicalId: 'sum_amount', slot: safe(1) },
       direction: 'desc',
-      nulls: 'last',
     }],
     tieBreak: { kind: 'dimensionTuple', fields: [tenantField] },
   };
@@ -313,7 +312,7 @@ test('calendar-period aggregates compile and decode result-only CalendarPeriod r
       output: { logicalId: 'count', slot: safe(1) },
       aggregate: { op: 'count' },
     }],
-    order: [{ output: { logicalId: 'week', slot: safe(0) }, direction: 'asc', nulls: 'last' }],
+    order: [{ output: { logicalId: 'week', slot: safe(0) }, direction: 'asc' }],
     tieBreak: { kind: 'dimensionTuple', fields: [instantField] },
   };
   const compiled = success(compileQuery(plan, registry));

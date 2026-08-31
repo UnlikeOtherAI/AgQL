@@ -14,7 +14,7 @@ export type ExecutionFingerprint = string & { readonly [executionFingerprintBran
 export type ScopeFingerprint = string & { readonly [scopeFingerprintBrand]: true };
 
 function sha256(value: string): string {
-  return createHash('sha256').update(value, 'utf8').digest('hex');
+  return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
 }
 
 /**

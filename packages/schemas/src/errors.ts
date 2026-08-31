@@ -2,12 +2,24 @@ import type { z } from 'zod';
 
 export const ERROR_CODES = [
   'STRUCTURAL_INVALID',
+  'SCHEMA_TYPE_MISMATCH',
+  'LIMIT_OUT_OF_RANGE',
   'SEMANTIC_INVALID',
+  'OUTPUT_ID_COLLISION',
+  'OUTPUT_ID_INVALID',
+  'ENUM_VALUE_INVALID',
   'UNSUPPORTED_IN_V0',
   'REFERENCE_NOT_AVAILABLE',
   'UNSUPPORTED_PROFILE',
   'SCOPE_UNENFORCEABLE',
   'EXACT_SCAN_BUDGET_EXCEEDED',
+  'EXACT_SCAN_LIMIT_EXCEEDED',
+  'MONEY_CURRENCY_MIXED',
+  'QUERY_WRITE_FORBIDDEN',
+  'NATIVE_PASSTHROUGH_FORBIDDEN',
+  'REGEX_FORBIDDEN',
+  'UDF_FORBIDDEN',
+  'EVALUABLE_CONSTRUCT_FORBIDDEN',
   'FRESHNESS_UNAVAILABLE',
   'EMBEDDING_NOT_INDEXED',
   'FILTER_SHAPE_UNCERTIFIED',
@@ -43,7 +55,7 @@ export interface AgqlErrorBase<C extends ErrorCode> {
  */
 export interface ReferenceNotAvailableError
   extends Omit<AgqlErrorBase<'REFERENCE_NOT_AVAILABLE'>, 'alternatives'> {
-  readonly alternatives: readonly [];
+  readonly alternatives: readonly string[];
 }
 
 export type AgqlError =
@@ -72,12 +84,7 @@ export function jsonPointer(path: readonly (string | number)[]): string {
 }
 
 export function structuralErrors(error: z.ZodError): readonly [AgqlError, ...AgqlError[]] {
-  const mapped = error.issues.map((issue): AgqlError => ({
-    code: 'STRUCTURAL_INVALID',
-    message: `The document is structurally invalid: ${issue.message}`,
-    path: jsonPointer(issue.path),
-    alternatives: structuralAlternatives(issue),
-  }));
+  const mapped = error.issues.map((issue): AgqlError => structuralErrorForIssue(issue));
   const first = mapped[0];
   if (first === undefined) {
     return [{
@@ -88,6 +95,39 @@ export function structuralErrors(error: z.ZodError): readonly [AgqlError, ...Agq
     }];
   }
   return [first, ...mapped.slice(1)];
+}
+
+function structuralErrorForIssue(issue: z.ZodIssue): AgqlError {
+  const path = jsonPointer(issue.path);
+  if (path === '/take' && (issue.code === 'too_small' || issue.code === 'too_big')) {
+    return {
+      code: 'LIMIT_OUT_OF_RANGE',
+      message: 'The bounded integer is outside the permitted range.',
+      path,
+      alternatives: ['Use an integer from 1 through 1000.'],
+    };
+  }
+  const typePaths: Readonly<Record<string, string>> = {
+    '/version': 'Use the JSON string "0".',
+    '/select': 'Use a JSON array of field ids.',
+    '/order': 'Use a JSON array of order items.',
+  };
+  const alternative = typePaths[path];
+  if (alternative !== undefined
+    && (issue.code === 'invalid_type' || issue.code === 'invalid_literal')) {
+    return {
+      code: 'SCHEMA_TYPE_MISMATCH',
+      message: 'The value has the wrong JSON type.',
+      path,
+      alternatives: [alternative],
+    };
+  }
+  return {
+    code: 'STRUCTURAL_INVALID',
+    message: `The document is structurally invalid: ${issue.message}`,
+    path,
+    alternatives: structuralAlternatives(issue),
+  };
 }
 
 function structuralAlternatives(issue: z.ZodIssue): LegalAlternatives {
@@ -104,11 +144,14 @@ export function errorResult(error: AgqlError): ErrorResult {
   return { ok: false, errors: [error] };
 }
 
-export function referenceNotAvailable(path: string): ReferenceNotAvailableError {
+export function referenceNotAvailable(
+  path: string,
+  alternatives: readonly string[] = [],
+): ReferenceNotAvailableError {
   return {
     code: 'REFERENCE_NOT_AVAILABLE',
-    message: 'The referenced item is not available in the effective catalog.',
+    message: 'The referenced catalog item is not available in this scope.',
     path,
-    alternatives: [],
+    alternatives,
   };
 }

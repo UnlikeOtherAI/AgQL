@@ -56,7 +56,7 @@ test('hidden and nonexistent references have byte-identical refusal shapes', () 
     mode: 'records',
     from: 'docs',
     select: [field],
-    order: [{ by: 'docs.id', dir: 'asc', nulls: 'last' }],
+    order: [{ by: 'docs.id', dir: 'asc' }],
     take: 1,
   });
   const hidden = compileQuery(compileInput(query('docs.secret')));
@@ -66,9 +66,12 @@ test('hidden and nonexistent references have byte-identical refusal shapes', () 
   assert.equal(canonicalizeJcs(hiddenError), canonicalizeJcs(missingError));
   assert.deepEqual(hiddenError, {
     code: 'REFERENCE_NOT_AVAILABLE',
-    message: 'The referenced item is not available in the effective catalog.',
+    message: 'The referenced catalog item is not available in this scope.',
     path: '/select/0',
-    alternatives: [],
+    alternatives: [
+      'docs.amount', 'docs.body', 'docs.created', 'docs.id', 'docs.qty', 'docs.tenant',
+      'docs.title',
+    ],
   });
 });
 
@@ -115,7 +118,7 @@ test('enum labels are not accepted as enum values', () => {
       value: 'Tenant A',
     },
   }));
-  assert.equal(firstError(result)?.code, 'SEMANTIC_INVALID');
+  assert.equal(firstError(result)?.code, 'ENUM_VALUE_INVALID');
   assert.equal(firstError(result)?.path, '/where/value');
 });
 
@@ -126,26 +129,28 @@ test('aggregate plans resolve ids, filters, ratio null semantics, and dimension 
     from: 'docs',
     dimensions: [{ kind: 'field', field: 'docs.tenant', id: 'tenant' }],
     metrics: [
-      { kind: 'aggregate', op: 'sum', field: 'docs.amount', id: 'total' },
+      { op: 'sum', field: 'docs.amount', id: 'total' },
+      { op: 'count', id: 'count' },
+      { op: 'sum', field: 'docs.qty', id: 'quantity' },
       {
-        kind: 'ratio',
+        op: 'ratio',
         id: 'ratio',
-        numerator: { kind: 'aggregate', op: 'count' },
-        denominator: { kind: 'aggregate', op: 'sum', field: 'docs.qty' },
+        numerator: 'count',
+        denominator: 'quantity',
       },
     ],
     having: { kind: 'predicate', field: 'total', op: 'gt', value: {
       amount: '0',
       currency: 'USD',
     } },
-    order: [{ by: 'total', dir: 'desc', nulls: 'last' }],
+    order: [{ by: 'total', dir: 'desc' }],
     take: 20,
   })));
   assert.equal(result.plan.mode, 'aggregate');
   if (result.plan.mode !== 'aggregate') assert.fail('Expected aggregate plan.');
   assert.equal(result.plan.tieBreak.kind, 'dimensionTuple');
-  assert.equal(result.plan.metrics[1]?.kind, 'ratio');
-  const ratio = result.plan.metrics[1];
+  assert.equal(result.plan.metrics[3]?.kind, 'ratio');
+  const ratio = result.plan.metrics[3];
   if (ratio?.kind !== 'ratio') assert.fail('Expected ratio metric.');
   assert.equal(ratio.divideByZero, 'null');
   const having = result.plan.having;
@@ -160,11 +165,11 @@ test('prototype-style aggregate aliases and output collisions are refused', () =
     mode: 'aggregate',
     from: 'docs',
     dimensions: [],
-    metrics: [{ kind: 'aggregate', op: 'count', id: '__proto__' }],
-    order: [{ by: '__proto__', dir: 'asc', nulls: 'last' }],
+    metrics: [{ op: 'count', id: '__proto__' }],
+    order: [{ by: '__proto__', dir: 'asc' }],
     take: 1,
   }));
-  assert.equal(firstError(result)?.code, 'SEMANTIC_INVALID');
+  assert.equal(firstError(result)?.code, 'OUTPUT_ID_INVALID');
   assert.equal(firstError(result)?.path, '/metrics/0/id');
 });
 
@@ -271,15 +276,15 @@ test('field policy is enforced independently for every operation surface', () =>
     },
     {
       ...recordsQuery,
-      order: [{ by: 'docs.secret', dir: 'asc', nulls: 'last' }],
+      order: [{ by: 'docs.secret', dir: 'asc' }],
     },
     {
       version: '0',
       mode: 'aggregate',
       from: 'docs',
       dimensions: [{ kind: 'field', field: 'docs.secret', id: 'secret' }],
-      metrics: [{ kind: 'aggregate', op: 'count', id: 'count' }],
-      order: [{ by: 'count', dir: 'asc', nulls: 'last' }],
+      metrics: [{ op: 'count', id: 'count' }],
+      order: [{ by: 'count', dir: 'asc' }],
       take: 1,
     },
     {
@@ -288,12 +293,11 @@ test('field policy is enforced independently for every operation surface', () =>
       from: 'docs',
       dimensions: [],
       metrics: [{
-        kind: 'aggregate',
         op: 'countDistinct',
         field: 'docs.secret',
         id: 'secretCount',
       }],
-      order: [{ by: 'secretCount', dir: 'asc', nulls: 'last' }],
+      order: [{ by: 'secretCount', dir: 'asc' }],
       take: 1,
     },
     {
