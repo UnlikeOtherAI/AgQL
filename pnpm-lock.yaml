@@ -101,9 +101,46 @@ importers:
         specifier: ^4.20.5
         version: 4.23.13
 
-  packages/http: {}
+  packages/http:
+    dependencies:
+      '@agql/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      '@agql/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@agql/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@agql/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+    devDependencies:
+      tsx:
+        specifier: ^4.20.5
+        version: 4.23.13
 
-  packages/mcp: {}
+  packages/mcp:
+    dependencies:
+      '@agql/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      '@agql/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@agql/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+      zod-to-json-schema:
+        specifier: ^3.24.6
+        version: 3.25.2(zod@3.25.76)
+    devDependencies:
+      tsx:
+        specifier: ^4.20.5
+        version: 4.23.13
 
   packages/schemas:
     dependencies:
