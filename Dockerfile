@@ -19,6 +19,7 @@ COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/engine/package.json packages/engine/package.json
 COPY packages/http/package.json packages/http/package.json
 COPY packages/mcp/package.json packages/mcp/package.json
+COPY packages/schemas/package.json packages/schemas/package.json
 COPY packages/server/package.json packages/server/package.json
 
 RUN pnpm install --frozen-lockfile
