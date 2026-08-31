@@ -3,6 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts"
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "tsx --test 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@agql/catalog": "workspace:*",
+    "@agql/contracts": "workspace:*",
+    "@agql/schemas": "workspace:*",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.6"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5"
+  }
 }
-
