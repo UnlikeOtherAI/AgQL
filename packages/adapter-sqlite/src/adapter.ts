@@ -3,6 +3,7 @@ import type {
   AdapterExecutionResult,
   AdapterOutcome,
   CanonicalIngestPlan,
+  IngestResult,
   LogicalPlanForProfile,
   VisibilityObservation,
   WriteReceipt,
@@ -52,13 +53,25 @@ function executeQuery(
 function compileIngest(
   plan: CanonicalIngestPlan,
 ): Promise<AdapterOutcome<CompiledCanonicalIngest>> {
+  if (plan.scope.visibility === 'predicate' && plan.scope.predicates.length === 0) {
+    return Promise.resolve({
+      kind: 'refusal',
+      refusal: {
+        code: 'SCOPE_UNENFORCEABLE',
+        message: 'Canonical ingest requires an expanded mandatory-pushdown scope.',
+        path: '/scope',
+        alternatives: ['Compile ingest with every resolved scope predicate.'],
+        remedy: 'Preserve the expanded write scope through adapter compilation.',
+      },
+    });
+  }
   return Promise.resolve({ kind: 'success', value: { kind: 'ingest', plan } });
 }
 
 function executeIngest(
   compiled: CompiledCanonicalIngest,
   options: SqliteAdapterOptions,
-): Promise<AdapterOutcome<WriteReceipt>> {
+): Promise<AdapterOutcome<IngestResult>> {
   return Promise.resolve(executeCanonicalIngest(options.databasePath, compiled));
 }
 

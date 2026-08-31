@@ -21,7 +21,15 @@ import type {
   ScopeFingerprint,
 } from '@agql/schemas';
 
-export type EngineError = AgqlError & { readonly remedy?: string };
+export type EngineError = AgqlError & {
+  readonly remedy?: string | {
+    readonly action: 'retryAfterWrite';
+    readonly details: {
+      readonly receipt: string;
+      readonly require: readonly [string, ...string[]];
+    };
+  };
+};
 
 export type EngineResult<T> =
   | { readonly ok: true; readonly value: T }
@@ -78,8 +86,11 @@ export interface QualityCertification {
 }
 
 export interface CalendarPolicy {
-  readonly timezone: 'UTC';
-  readonly weekStartsOn: 'monday';
+  readonly timezone: string;
+  readonly timezoneDatabase: '2024a' | 'fixed-offset';
+  readonly weekStart: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday'
+    | 'saturday' | 'sunday';
+  readonly fiscalDayStart: string;
 }
 
 export interface CompileQueryInput {

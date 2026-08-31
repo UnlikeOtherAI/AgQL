@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { InstantValueSchema } from '@agql/schemas';
 import type { CapabilityProfile } from '@agql/schemas';
 
 import type {
   AdapterContract,
   AdapterRefusal,
+  AdapterResultValue,
   LogicalPlanForProfile,
+  ModelReleasedValue,
+  ResultValue,
   ResultEnvelope,
   VisibilityTransition,
 } from './index.ts';
@@ -62,4 +66,26 @@ test('receipt transitions and model result keys preserve the shared boundaries',
   type HasPrincipalRows = 'principalRows' extends keyof ResultEnvelope ? true : false;
   const hasPrincipalRows: HasPrincipalRows = false;
   assert.equal(hasPrincipalRows, false);
+});
+
+test('calendar periods cross adapter results and model null remains valid', () => {
+  const period: AdapterResultValue = {
+    kind: 'calendarPeriod',
+    value: {
+      start: InstantValueSchema.parse('2024-01-01T00:00:00Z'),
+      endExclusive: InstantValueSchema.parse('2024-01-08T00:00:00Z'),
+      timezone: 'UTC',
+      grain: 'week',
+      label: '2024-W01',
+    },
+  };
+  assert.equal(period.kind, 'calendarPeriod');
+
+  const releasedNull: ModelReleasedValue = null;
+  assert.equal(releasedNull, null);
+
+  const unreleasedValue: ResultValue = 'principal-only';
+  // @ts-expect-error Model release branding is required for every non-null value.
+  const cannotCrossChannel: ModelReleasedValue = unreleasedValue;
+  void cannotCrossChannel;
 });

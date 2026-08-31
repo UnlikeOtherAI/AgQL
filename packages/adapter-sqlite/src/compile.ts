@@ -1,6 +1,7 @@
 import type {
   AdapterOutcome,
   AdapterRefusal,
+  AdapterRefusalCode,
   LogicalFilter,
   LogicalPlanForProfile,
   ResolvedAggregateExpression,
@@ -27,14 +28,14 @@ type QueryPlan = LogicalPlanForProfile<
 >;
 
 function refusal(
-  code: AdapterRefusal['code'],
+  code: Exclude<AdapterRefusalCode, 'AFTER_WRITE_TIMEOUT'>,
   message: string,
   path: string,
   remedy: string,
 ): AdapterOutcome<never> {
   return {
     kind: 'refusal',
-    refusal: { code, message, path, alternatives: [remedy], remedy },
+    refusal: { code, message, path, alternatives: [remedy], remedy } as AdapterRefusal,
   };
 }
 

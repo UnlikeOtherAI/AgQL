@@ -1,5 +1,6 @@
 import type {
   AdapterRow,
+  AdapterResultValue,
   FreshnessDeclaration,
   ModelPreviewRow,
   ModelReleasedValue,
@@ -8,7 +9,6 @@ import type {
   ResultEnvelope,
   ResultSchemaField,
   ResultValue,
-  TypedValue,
 } from '@agql/contracts';
 import { executionFingerprint } from '@agql/schemas';
 
@@ -31,17 +31,32 @@ function outputBindings(input: ResultAssemblyInput): readonly ResolvedOutputBind
   return plan.projection.map(({ output }) => output);
 }
 
-function resultValue(value: TypedValue): ResultValue {
+function resultValue(value: AdapterResultValue): ResultValue {
   return value.value;
 }
 
-function releaseValue(value: TypedValue): ModelReleasedValue {
+function releaseValue(value: AdapterResultValue): ModelReleasedValue {
   return resultValue(value) as ModelReleasedValue;
 }
 
-function valueMatchesSchema(value: TypedValue, schema: ResultSchemaField): boolean {
+function valueMatchesSchema(value: AdapterResultValue, schema: ResultSchemaField): boolean {
   if (value.kind === 'null') return schema.nullable;
-  if (schema.kind === 'rank' || schema.kind === 'calendarPeriod') return false;
+  if (schema.kind === 'rank') return false;
+  if (schema.kind === 'calendarPeriod') {
+    if (value.kind !== 'calendarPeriod') return false;
+    const start = new Date(value.value.start).valueOf();
+    const endExclusive = new Date(value.value.endExclusive).valueOf();
+    if (value.value.grain !== schema.grain
+      || value.value.timezone !== schema.timezone
+      || !Number.isFinite(start) || !Number.isFinite(endExclusive)
+      || start >= endExclusive) return false;
+    const label = schema.grain === 'week'
+      ? /^\d{4}-W(?:0[1-9]|[1-4]\d|5[0-3])$/u
+      : schema.grain === 'month'
+        ? /^\d{4}-(?:0[1-9]|1[0-2])$/u
+        : /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/u;
+    return label.test(value.value.label);
+  }
   if (schema.kind === 'text') return value.kind === 'text';
   if (schema.kind === 'enum') return value.kind === 'enum';
   return schema.kind === value.kind;
@@ -293,10 +308,16 @@ export function assembleResult(
     if (input.observedReceipt === undefined) {
       return fail(repairableError(
         'AFTER_WRITE_TIMEOUT',
-        'No certified receipt observation accompanies this afterWrite result.',
+        'The afterWrite deadline elapsed before every required visibility state was observable.',
         '/afterWrite',
-        ['Observe every required state before result assembly.'],
-        'Wait for certified visibility and provide the observed receipt.',
+        ['Retry with the same receipt and requirements.'],
+        {
+          action: 'retryAfterWrite',
+          details: {
+            receipt: input.compiled.afterWrite.receipt,
+            require: input.compiled.afterWrite.require,
+          },
+        },
       ));
     }
     const visible = evaluateAfterWrite(input.compiled.afterWrite, input.observedReceipt);
@@ -330,10 +351,16 @@ export function assembleResult(
     if (receipt === undefined) {
       return fail(repairableError(
         'AFTER_WRITE_TIMEOUT',
-        'The certified observed receipt is absent at result assembly.',
+        'The afterWrite deadline elapsed before every required visibility state was observable.',
         '/afterWrite',
-        ['Provide the receipt returned by certified visibility observation.'],
-        'Observe every required state before result assembly.',
+        ['Retry with the same receipt and requirements.'],
+        {
+          action: 'retryAfterWrite',
+          details: {
+            receipt: input.compiled.afterWrite.receipt,
+            require: input.compiled.afterWrite.require,
+          },
+        },
       ));
     }
     writeVisibility = { kind: 'afterWrite', receipt: receipt.receipt };

@@ -1,8 +1,9 @@
 import type {
   AdapterOutcome,
+  IngestRecordOutcome,
+  IngestResult,
   ResolvedCanonicalFieldValue,
   VisibilityState,
-  WriteReceipt,
 } from '@agql/contracts';
 import { SafeIntegerSchema } from '@agql/schemas';
 import type { PoolClient } from 'pg';
@@ -10,22 +11,23 @@ import type { PoolClient } from 'pg';
 import { backendRefusal, refusal } from './refusals.ts';
 import {
   insertReceiptRecord,
+  loadIngestResult,
   loadReceipt,
   newReceiptId,
   newVisibilityToken,
   reserveIdempotency,
   supersedeVisibility,
+  storeIngestResult,
   upsertVisibility,
 } from './receipt-store.ts';
 import { quoteIdentifier, quoteQualified } from './sql-identifiers.ts';
 import { encodeScalar, ParameterBuilder } from './sql-parameters.ts';
+import { eligibilitySql } from './sql-predicates.ts';
 import type {
-  CompiledPostgresEmbeddingMutation,
   CompiledPostgresIngest,
   PostgresAdapterConfig,
   PostgresDatasetBinding,
 } from './types.ts';
-import { pgvectorParameter } from './vector.ts';
 
 interface CanonicalValueRecord {
   readonly id: string;
@@ -66,8 +68,44 @@ function conflictRefusal<T>(): AdapterOutcome<T> {
     'The canonical write precondition was not satisfied.',
     '/records',
     ['Retry with the current record version or choose insertOnly/replace deliberately.'],
-    'Resolve the record-version conflict and submit a new idempotency key.',
+    'Retry with a new idempotency key and the current record version.',
   );
+}
+
+function refusedOutcome(id: string, index: number): IngestRecordOutcome {
+  return {
+    id,
+    status: 'refused',
+    version: null,
+    error: {
+      code: 'SEMANTIC_INVALID',
+      message: 'The canonical write precondition was not satisfied.',
+      path: `/records/${index}`,
+      alternatives: [
+        'Retry with the current record version or choose insertOnly/replace deliberately.',
+      ],
+    },
+  };
+}
+
+function acceptedOutcome(
+  id: string,
+  version: ReturnType<typeof SafeIntegerSchema.parse>,
+): IngestRecordOutcome {
+  return { id, status: 'accepted', version, error: null };
+}
+
+function scopeSql(
+  compiled: CompiledPostgresIngest,
+  parameters: ParameterBuilder,
+  alias: string,
+): string {
+  return eligibilitySql({
+    registry: compiled.registry,
+    dataset: compiled.dataset,
+    alias,
+    parameters,
+  }, compiled.plan.scope);
 }
 
 function recordValues(
@@ -78,16 +116,21 @@ function recordValues(
 
 async function currentVersion(
   client: PoolClient,
-  config: PostgresAdapterConfig,
-  dataset: PostgresDatasetBinding,
+  compiled: CompiledPostgresIngest,
   id: string,
 ): Promise<ReturnType<typeof SafeIntegerSchema.parse> | undefined> {
-  const table = quoteQualified(config.namespace, dataset.dataset.physical);
-  const idColumn = quoteIdentifier(dataset.idField.physical);
+  const parameters = new ParameterBuilder();
+  const table = quoteQualified(
+    compiled.registry.config.namespace,
+    compiled.dataset.dataset.physical,
+  );
+  const idColumn = quoteIdentifier(compiled.dataset.idField.physical);
+  const recordId = parameters.add(id, 'text');
+  const scope = scopeSql(compiled, parameters, 'd');
   const result = await client.query<[string]>({
-    text: `SELECT "_agql_version"::text FROM ${table} `
-      + `WHERE ${idColumn} = $1::text FOR UPDATE`,
-    values: [id],
+    text: `SELECT "_agql_version"::text FROM ${table} AS d `
+      + `WHERE d.${idColumn} = ${recordId} AND (${scope}) FOR UPDATE`,
+    values: [...parameters.values],
     rowMode: 'array',
   });
   const raw = result.rows[0]?.[0];
@@ -95,6 +138,36 @@ async function currentVersion(
   const parsed = SafeIntegerSchema.safeParse(Number(raw));
   if (!parsed.success) throw new Error('Stored version is outside the interoperable range.');
   return parsed.data;
+}
+
+async function newRecordVisibleToScope(
+  client: PoolClient,
+  compiled: CompiledPostgresIngest,
+  record: CanonicalValueRecord,
+): Promise<boolean> {
+  const parameters = new ParameterBuilder();
+  const byPhysical = recordValues(record.values);
+  const columns: string[] = [];
+  for (const field of compiled.dataset.fields) {
+    if (field.physical === compiled.dataset.idField.physical) {
+      columns.push(`${parameters.add(record.id, 'text')} AS ${quoteIdentifier(field.physical)}`);
+      continue;
+    }
+    const item = byPhysical.get(field.physical);
+    if (item === undefined) throw new Error('Compiled whole record lost a field.');
+    const encoded = encodeScalar(field, item.value);
+    if (encoded === undefined) throw new Error('Compiled whole record changed type.');
+    columns.push(
+      `${parameters.add(encoded.parameter, encoded.cast)} AS ${quoteIdentifier(field.physical)}`,
+    );
+  }
+  const scope = scopeSql(compiled, parameters, 'd');
+  const result = await client.query<[boolean]>({
+    text: `SELECT EXISTS (SELECT 1 FROM (SELECT ${columns.join(', ')}) AS d WHERE ${scope})`,
+    values: [...parameters.values],
+    rowMode: 'array',
+  });
+  return result.rows[0]?.[0] === true;
 }
 
 async function insertRecord(
@@ -159,10 +232,11 @@ async function replaceRecord(
     '"_agql_updated_at" = statement_timestamp()',
   );
   const id = parameters.add(record.id, 'text');
+  const scope = scopeSql(compiled, parameters, 'd');
   const table = quoteQualified(config.namespace, compiled.dataset.dataset.physical);
   await client.query(
-    `UPDATE ${table} SET ${assignments.join(', ')} `
-      + `WHERE ${quoteIdentifier(compiled.dataset.idField.physical)} = ${id}`,
+    `UPDATE ${table} AS d SET ${assignments.join(', ')} `
+      + `WHERE d.${quoteIdentifier(compiled.dataset.idField.physical)} = ${id} AND (${scope})`,
     [...parameters.values],
   );
 }
@@ -173,10 +247,14 @@ async function deleteRecord(
   config: PostgresAdapterConfig,
   id: string,
 ): Promise<void> {
+  const parameters = new ParameterBuilder();
+  const recordId = parameters.add(id, 'text');
+  const scope = scopeSql(compiled, parameters, 'd');
   const table = quoteQualified(config.namespace, compiled.dataset.dataset.physical);
   await client.query(
-    `DELETE FROM ${table} WHERE ${quoteIdentifier(compiled.dataset.idField.physical)} = $1::text`,
-    [id],
+    `DELETE FROM ${table} AS d WHERE d.${quoteIdentifier(compiled.dataset.idField.physical)} = `
+      + `${recordId} AND (${scope})`,
+    [...parameters.values],
   );
 }
 
@@ -209,7 +287,7 @@ async function writeVisibility(
         state: 'ready',
         token: newVisibilityToken(config, receipt, id, version, embedding.visibilityName),
       }
-      : { state: 'accepted' };
+      : { state: 'pending' };
     await upsertVisibility(
       client,
       config,
@@ -222,10 +300,78 @@ async function writeVisibility(
   }
 }
 
+function recordConflict(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code: unknown = Reflect.get(error, 'code');
+  return code === '23505' || code === '23514' || code === '23502';
+}
+
+async function processCanonicalRecord(
+  client: PoolClient,
+  compiled: CompiledPostgresIngest,
+  config: PostgresAdapterConfig,
+  receiptId: ReturnType<typeof newReceiptId>,
+  index: number,
+): Promise<IngestRecordOutcome> {
+  const record = compiled.plan.records[index];
+  if (record === undefined) throw new TypeError('Canonical ingest record index is invalid.');
+  const savepoint = `agql_record_${index}`;
+  await client.query(`SAVEPOINT ${savepoint}`);
+  try {
+    const current = await currentVersion(client, compiled, record.id);
+    const preconditionFailed = (compiled.plan.mode === 'insertOnly' && current !== undefined)
+      || ('ifVersion' in record && current !== record.ifVersion)
+      || (compiled.plan.mode === 'delete' && current === undefined);
+    if (preconditionFailed) {
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+      return refusedOutcome(record.id, index);
+    }
+    if ('values' in record && !await newRecordVisibleToScope(client, compiled, record)) {
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+      return refusedOutcome(record.id, index);
+    }
+    const version = SafeIntegerSchema.safeParse(current === undefined ? 1 : current + 1);
+    if (!version.success) {
+      await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+      return refusedOutcome(record.id, index);
+    }
+    await supersedeVisibility(client, config, compiled.dataset, record.id);
+    if (compiled.plan.mode === 'insertOnly') {
+      if (!('values' in record)) throw new TypeError('Insert plan lost canonical values.');
+      await insertRecord(client, compiled, config, record, version.data);
+    } else if (compiled.plan.mode === 'replace') {
+      if (!('values' in record)) throw new TypeError('Replace plan lost canonical values.');
+      if (current === undefined) {
+        await insertRecord(client, compiled, config, record, version.data);
+      } else {
+        await replaceRecord(client, compiled, config, record, version.data);
+      }
+    } else {
+      await deleteRecord(client, compiled, config, record.id);
+    }
+    await writeVisibility(
+      client,
+      compiled,
+      config,
+      receiptId,
+      record.id,
+      version.data,
+      compiled.plan.mode === 'delete',
+    );
+    await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+    return acceptedOutcome(record.id, version.data);
+  } catch (error: unknown) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+    await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+    if (recordConflict(error)) return refusedOutcome(record.id, index);
+    throw error;
+  }
+}
+
 export async function executeCanonicalIngest(
   compiled: CompiledPostgresIngest,
   config: PostgresAdapterConfig,
-): Promise<AdapterOutcome<WriteReceipt>> {
+): Promise<AdapterOutcome<IngestResult>> {
   const client = await config.writerPool.connect();
   try {
     await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
@@ -257,7 +403,7 @@ export async function executeCanonicalIngest(
         await rollback(client);
         return conflictRefusal();
       }
-      const replay = await loadReceipt(client, config, reserved.receipt);
+      const replay = await loadIngestResult(client, config, reserved.receipt);
       if (replay === undefined) {
         await rollback(client);
         return backendRefusal();
@@ -265,156 +411,30 @@ export async function executeCanonicalIngest(
       await client.query('COMMIT');
       return { kind: 'success', value: replay };
     }
-    for (const record of compiled.plan.records) {
-      const current = await currentVersion(client, config, compiled.dataset, record.id);
-      if (compiled.plan.mode === 'insertOnly' && current !== undefined) {
-        await rollback(client);
-        return conflictRefusal();
-      }
-      if ('ifVersion' in record && current !== record.ifVersion) {
-        await rollback(client);
-        return conflictRefusal();
-      }
-      if (compiled.plan.mode === 'delete' && current === undefined) {
-        await rollback(client);
-        return conflictRefusal();
-      }
-      const numericVersion = current === undefined ? 1 : current + 1;
-      const parsedVersion = SafeIntegerSchema.safeParse(numericVersion);
-      if (!parsedVersion.success) {
-        await rollback(client);
-        return conflictRefusal();
-      }
-      await supersedeVisibility(client, config, compiled.dataset, record.id);
-      if (compiled.plan.mode === 'insertOnly') {
-        if (!('values' in record)) throw new Error('Insert plan lost canonical values.');
-        await insertRecord(client, compiled, config, record, parsedVersion.data);
-      } else if (compiled.plan.mode === 'replace') {
-        if (!('values' in record)) throw new Error('Replace plan lost canonical values.');
-        if (current === undefined) {
-          await insertRecord(client, compiled, config, record, parsedVersion.data);
-        } else {
-          await replaceRecord(client, compiled, config, record, parsedVersion.data);
-        }
-      } else {
-        await deleteRecord(client, compiled, config, record.id);
-      }
-      await writeVisibility(
-        client,
-        compiled,
-        config,
-        receiptId,
-        record.id,
-        parsedVersion.data,
-        compiled.plan.mode === 'delete',
-      );
+    const outcomes: IngestRecordOutcome[] = [];
+    for (let index = 0; index < compiled.plan.records.length; index += 1) {
+      outcomes.push(await processCanonicalRecord(client, compiled, config, receiptId, index));
     }
-    const receipt = await loadReceipt(client, config, receiptId);
-    if (receipt === undefined) {
+    const first = outcomes[0];
+    if (first === undefined) throw new TypeError('Canonical ingest requires at least one record.');
+    const accepted = outcomes.filter(
+      (outcome): outcome is Extract<IngestRecordOutcome, { readonly status: 'accepted' }> =>
+        outcome.status === 'accepted',
+    );
+    const writeReceipt = accepted.length === 0
+      ? { receipt: receiptId, records: [] }
+      : await loadReceipt(client, config, receiptId);
+    if (writeReceipt === undefined) {
       await rollback(client);
       return backendRefusal();
     }
+    const result: IngestResult = {
+      outcomes: [first, ...outcomes.slice(1)],
+      writeReceipt,
+    };
+    await storeIngestResult(client, config, result);
     await client.query('COMMIT');
-    return { kind: 'success', value: receipt };
-  } catch {
-    await rollback(client);
-    return backendRefusal();
-  } finally {
-    client.release();
-  }
-}
-
-export async function executeEmbeddingMutation(
-  compiled: CompiledPostgresEmbeddingMutation,
-  config: PostgresAdapterConfig,
-): Promise<AdapterOutcome<WriteReceipt>> {
-  const client = await config.writerPool.connect();
-  try {
-    await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
-    await client.query('SELECT set_config($1::text, $2::text, true)', [
-      'statement_timeout',
-      `${config.statementTimeoutMs}ms`,
-    ]);
-    if (!await verifyWriterRole(client, compiled.dataset, config)) {
-      await rollback(client);
-      return refusal(
-        'SCOPE_UNENFORCEABLE',
-        'The configured PostgreSQL writer role is not confined to data mutation.',
-        '/scope',
-        ['Use the configured runtime writer role.'],
-        'Correct the deployment writer role.',
-      );
-    }
-    const receiptId = newReceiptId();
-    const scope = `embedding:${compiled.embedding.embedding.specReference}`;
-    const reserved = await reserveIdempotency(
-      client,
-      config,
-      scope,
-      compiled.mutation.idempotencyKey,
-      compiled.operationDigest,
-      receiptId,
-    );
-    if (!reserved.inserted) {
-      if (reserved.digest !== compiled.operationDigest) {
-        await rollback(client);
-        return conflictRefusal();
-      }
-      const replay = await loadReceipt(client, config, reserved.receipt);
-      if (replay === undefined) {
-        await rollback(client);
-        return backendRefusal();
-      }
-      await client.query('COMMIT');
-      return { kind: 'success', value: replay };
-    }
-    const table = quoteQualified(config.namespace, compiled.dataset.dataset.physical);
-    const idColumn = quoteIdentifier(compiled.dataset.idField.physical);
-    const vectorColumn = quoteIdentifier(compiled.embedding.embedding.physical);
-    const vector = compiled.mutation.kind === 'put'
-      ? pgvectorParameter(compiled.mutation.vector, config.vectorByteOrder)
-      : null;
-    const result = await client.query<[string]>({
-      text: `UPDATE ${table} SET ${vectorColumn} = $1::vector `
-        + `WHERE ${idColumn} = $2::text AND "_agql_version" = $3::bigint `
-        + 'RETURNING "_agql_version"::text',
-      values: [vector, compiled.mutation.recordId, compiled.mutation.sourceVersion],
-      rowMode: 'array',
-    });
-    if (result.rowCount !== 1 || vector === undefined) {
-      await rollback(client);
-      return conflictRefusal();
-    }
-    const token = newVisibilityToken(
-      config,
-      receiptId,
-      compiled.mutation.recordId,
-      compiled.mutation.sourceVersion,
-      compiled.embedding.visibilityName,
-    );
-    await upsertVisibility(
-      client,
-      config,
-      compiled.dataset,
-      compiled.mutation.recordId,
-      compiled.mutation.sourceVersion,
-      compiled.embedding.visibilityName,
-      { state: 'ready', token },
-    );
-    await insertReceiptRecord(client, config, {
-      receipt: receiptId,
-      datasetPhysical: compiled.dataset.dataset.physical,
-      id: compiled.mutation.recordId,
-      version: compiled.mutation.sourceVersion,
-      action: 'embedding',
-    });
-    const receipt = await loadReceipt(client, config, receiptId);
-    if (receipt === undefined) {
-      await rollback(client);
-      return backendRefusal();
-    }
-    await client.query('COMMIT');
-    return { kind: 'success', value: receipt };
+    return { kind: 'success', value: result };
   } catch {
     await rollback(client);
     return backendRefusal();

@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-
 import type {
   AdapterExecutionResult,
   VisibilityToken,
@@ -9,6 +8,7 @@ import type {
 } from '@agql/contracts';
 import {
   canonicalizeJcs,
+  InstantValueSchema,
   NormalizedTextSchema,
   SafeIntegerSchema,
 } from '@agql/schemas';
@@ -33,17 +33,14 @@ import type {
   ComponentTimings,
   EngineResult,
 } from './types.ts';
-
 function success<T>(result: EngineResult<T>): T {
   if (!result.ok) assert.fail(JSON.stringify(result.errors));
   return result.value;
 }
-
 function errorCode<T>(result: EngineResult<T>): string {
   if (result.ok) assert.fail('Expected a refusal.');
   return result.errors[0]?.code ?? 'missing';
 }
-
 const timings: ComponentTimings = {
   authMs: SafeIntegerSchema.parse(1),
   validationPolicyMs: SafeIntegerSchema.parse(2),
@@ -52,7 +49,6 @@ const timings: ComponentTimings = {
   backendMs: SafeIntegerSchema.parse(4),
   fusionReleaseMs: SafeIntegerSchema.parse(1),
 };
-
 function adapter(
   calls: { compile: number; execute: number },
   execution: AdapterExecutionResult = {
@@ -75,7 +71,6 @@ function adapter(
     },
   };
 }
-
 test('compile-time policy refusal never invokes the adapter', async () => {
   const calls = { compile: 0, execute: 0 };
   const result = await executeQuery(
@@ -85,7 +80,6 @@ test('compile-time policy refusal never invokes the adapter', async () => {
   assert.equal(errorCode(result), 'REFERENCE_NOT_AVAILABLE');
   assert.deepEqual(calls, { compile: 0, execute: 0 });
 });
-
 test('empty partitions mean nothing visible and require no backend call', async () => {
   const calls = { compile: 0, execute: 0 };
   const result = success(await executeQuery({
@@ -145,9 +139,15 @@ test('rrf-v0 refuses an unbounded intermediate result', () => {
 });
 
 test('receipt states are monotonic and afterWrite requires every named state', () => {
+  const compiled = success(compileQuery(compileInput(recordsQuery)));
+  if (compiled.plan.mode !== 'records') throw new Error('Expected a records plan.');
   const token = 'opaque-token' as VisibilityToken;
   assert.equal(success(validateVisibilityTransition(
     { state: 'accepted' },
+    { state: 'pending' },
+  )), true);
+  assert.equal(success(validateVisibilityTransition(
+    { state: 'pending' },
     { state: 'ready', token },
   )), true);
   assert.equal(errorCode(validateVisibilityTransition(
@@ -161,7 +161,7 @@ test('receipt states are monotonic and afterWrite requires every named state', (
       version: SafeIntegerSchema.parse(1),
       visibility: {
         record: { state: 'ready', token },
-        'embedding:body@2': { state: 'accepted' },
+        'embedding:body@2': { state: 'pending' },
       },
     }],
   };
@@ -170,8 +170,19 @@ test('receipt states are monotonic and afterWrite requires every named state', (
     require: ['record', 'embedding:body@2'] as const,
     timeoutMs: SafeIntegerSchema.parse(50),
     anchor: compileInput(recordsQuery).anchor,
+    scopeFingerprint: compiled.scopeFingerprint,
+    scope: compiled.plan.scope,
+    dataset: compiled.plan.dataset,
+    idField: compiled.plan.projection[0].field,
   };
-  assert.equal(errorCode(evaluateAfterWrite(observation, receipt)), 'AFTER_WRITE_TIMEOUT');
+  const timeout = evaluateAfterWrite(observation, receipt);
+  assert.equal(errorCode(timeout), 'AFTER_WRITE_TIMEOUT');
+  if (!timeout.ok) {
+    assert.deepEqual(timeout.errors[0]?.remedy, {
+      action: 'retryAfterWrite',
+      details: { receipt: 'wr-1', require: ['embedding:body@2'] },
+    });
+  }
   const ready: WriteReceipt = {
     ...receipt,
     records: [{
@@ -260,6 +271,60 @@ test('minimumCohort suppresses rows per channel as an inference dampener', () =>
     cohortCounts: [SafeIntegerSchema.parse(4)],
   }));
   assert.deepEqual(output.result.preview, []);
+});
+
+test('aggregate result assembly releases calendar-period dimensions and their null group', () => {
+  const compiled = success(compileQuery(compileInput({
+    version: '0',
+    mode: 'aggregate',
+    from: 'docs',
+    dimensions: [{
+      kind: 'timeBucket',
+      field: 'docs.created',
+      grain: 'week',
+      timezone: 'UTC',
+      id: 'week',
+    }],
+    metrics: [{ kind: 'aggregate', op: 'count', id: 'count' }],
+    order: [{ by: 'week', dir: 'asc', nulls: 'last' }],
+    take: 10,
+  })));
+  const period = {
+    start: InstantValueSchema.parse('2024-03-04T00:00:00Z'),
+    endExclusive: InstantValueSchema.parse('2024-03-11T00:00:00Z'),
+    timezone: 'UTC',
+    grain: 'week' as const,
+    label: '2024-W10',
+  };
+  const output = success(assembleResult({
+    compiled,
+    execution: {
+      rows: [
+        [
+          { kind: 'calendarPeriod', value: period },
+          { kind: 'integer', value: SafeIntegerSchema.parse(2) },
+        ],
+        [{ kind: 'null', value: null }, { kind: 'integer', value: SafeIntegerSchema.parse(1) }],
+      ],
+      truncated: false,
+      snapshot: { kind: 'none' },
+    },
+    engineVersion: 'engine-1',
+    adapterVersion: adapterDescriptor.version,
+    release: {
+      policies: [],
+      previewRowLimit: SafeIntegerSchema.parse(10),
+      channelPolicyFingerprint: 'channel-policy-1',
+    },
+    replayTier: 'auditable',
+    principalResultAvailable: false,
+    timings,
+    executionSnapshotTier: 'none',
+  }));
+  assert.deepEqual(output.result.preview, [
+    { week: period, count: 2 },
+    { week: null, count: 1 },
+  ]);
 });
 
 test('approximate retrieval result carries complete certified provenance and rank only', () => {

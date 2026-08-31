@@ -11,6 +11,8 @@ import { canonicalizeJcs, SafeIntegerSchema } from '@agql/schemas';
 
 import { refusal, unsafePlan } from './refusals.ts';
 import type { RuntimeRegistry } from './registry.ts';
+import { eligibilitySql, SqlCompilationError } from './sql-predicates.ts';
+import { ParameterBuilder } from './sql-parameters.ts';
 import { encodeScalar } from './sql-parameters.ts';
 import type {
   CompiledPostgresEmbeddingMutation,
@@ -87,6 +89,30 @@ export function compileCanonicalIngest(
       'Install the resolved canonical binding before ingest.',
     );
   }
+  if (plan.scope.visibility === 'predicate' && plan.scope.predicates.length === 0) {
+    return refusal(
+      'SCOPE_UNENFORCEABLE',
+      'Canonical ingestion requires a non-empty mandatory-pushdown scope predicate.',
+      '/scope',
+      ['Compile ingestion from a resolved scope with visible partitions.'],
+      'Resolve and preserve the expanded scope predicate before adapter compilation.',
+    );
+  }
+  try {
+    const parameters = new ParameterBuilder();
+    eligibilitySql({ registry, dataset, alias: 'd', parameters }, plan.scope);
+  } catch (error: unknown) {
+    if (error instanceof SqlCompilationError) {
+      return refusal(
+        'SCOPE_UNENFORCEABLE',
+        'Canonical ingestion scope fields are not enforceable by this PostgreSQL binding.',
+        '/scope',
+        ['Use a binding that contains every resolved scope field.'],
+        'Choose a binding that enforces the expanded scope before every mutation.',
+      );
+    }
+    throw error;
+  }
   if (plan.idempotencyKey.length === 0 || plan.records.length === 0
     || new Set(plan.records.map((record) => record.id)).size !== plan.records.length
     || plan.records.some((record) => record.id.length === 0)) {
@@ -108,7 +134,13 @@ export function compileCanonicalIngest(
   }
   return {
     kind: 'success',
-    value: { operation: 'canonicalIngest', plan, dataset, operationDigest: ingestDigest(plan) },
+    value: {
+      operation: 'canonicalIngest',
+      plan,
+      dataset,
+      registry,
+      operationDigest: ingestDigest(plan),
+    },
   };
 }
 

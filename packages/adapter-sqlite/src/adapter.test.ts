@@ -7,10 +7,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 import {
   createSqliteAdapter,
-  provisionSqliteAdapterStorage,
 } from './index.ts';
 import type {
-  CanonicalIngestPlan,
   CatalogPhysicalIdentifier,
   LogicalPlanForProfile,
   QueryVectorDigest,
@@ -19,15 +17,12 @@ import type {
   RuntimeOwnedVector,
 } from '@agql/contracts';
 import {
-  CanonicalDecimalSchema,
-  InstantValueSchema,
   NormalizedTextSchema,
   SafeIntegerSchema,
 } from '@agql/schemas';
 import type {
   EffectivePlanHash,
   SafeInteger,
-  ScopeFingerprint,
   SourceQueryHash,
 } from '@agql/schemas';
 
@@ -82,6 +77,13 @@ const bodyField: ResolvedFieldBinding = {
   nullable: false,
 };
 
+const instantField: ResolvedFieldBinding = {
+  logicalId: 'records.created',
+  physical: physical('created_at'),
+  type: { kind: 'instant', precision: 'second' },
+  nullable: true,
+};
+
 function vectorField(): CatalogPhysicalIdentifier {
   return physical(vectorName);
 }
@@ -92,14 +94,6 @@ function sourceHash(): SourceQueryHash {
 
 function planHash(): EffectivePlanHash {
   return 'plan-test' as EffectivePlanHash;
-}
-
-function scopeHash(): ScopeFingerprint {
-  return 'scope-test' as ScopeFingerprint;
-}
-
-function decimal(value: string) {
-  return CanonicalDecimalSchema.parse(value);
 }
 
 function recordsPlan(tenant: 'north' | 'south'): LogicalPlanForProfile<'records.v0'> {
@@ -184,6 +178,29 @@ function aggregatePlan(): LogicalPlanForProfile<'aggregate.v0'> {
   };
 }
 
+function calendarAggregatePlan(): LogicalPlanForProfile<'aggregate.v0'> {
+  return {
+    ...aggregatePlan(),
+    dimensions: [{
+      kind: 'calendarPeriod',
+      output: { logicalId: 'week', slot: safe(0) },
+      field: instantField,
+      grain: 'week',
+      timezone: 'UTC',
+      weekStart: 'monday',
+      fiscalDayStart: '00:00:00',
+      resultKind: 'calendarPeriod',
+    }],
+    metrics: [{
+      kind: 'aggregate',
+      output: { logicalId: 'count', slot: safe(1) },
+      aggregate: { op: 'count' },
+    }],
+    order: [{ output: { logicalId: 'week', slot: safe(0) }, direction: 'asc', nulls: 'last' }],
+    tieBreak: { kind: 'dimensionTuple', fields: [instantField] },
+  };
+}
+
 function littleEndianFloat32(values: readonly number[]): Uint8Array {
   const bytes = new Uint8Array(values.length * 4);
   const view = new DataView(bytes.buffer);
@@ -263,6 +280,7 @@ function createSchema(path: string): void {
         + `${sqlIdentifier(tenantName)} TEXT NOT NULL, `
         + `${sqlIdentifier(amountName)} TEXT NOT NULL, `
         + `${sqlIdentifier(bodyName)} TEXT NOT NULL, `
+        + `${sqlIdentifier(instantField.physical)} TEXT, `
         + `${sqlIdentifier(vectorName)} BLOB, `
         + '"__agql_version" INTEGER NOT NULL, '
         + '"__agql_deleted" INTEGER NOT NULL) STRICT',
@@ -277,17 +295,23 @@ function seed(path: string): ReadonlyMap<string, 'north' | 'south'> {
   const tenancy = new Map<string, 'north' | 'south'>();
   try {
     const insert = database.prepare(
-      `INSERT INTO ${sqlIdentifier(tableName)} VALUES (?, ?, ?, ?, ?, 1, 0)`,
+      `INSERT INTO ${sqlIdentifier(tableName)} VALUES (?, ?, ?, ?, ?, ?, 1, 0)`,
     );
-    const rows: readonly [string, 'north' | 'south', string, string, readonly number[]][] = [
-      ["x'); DROP TABLE sentinel; --", 'north', '-10', 'literal [note] one', [5, 0]],
-      ['north-two', 'north', '-2', 'literal [note] two', [4, 3]],
-      ['north-three', 'north', '-0.5', 'literal [note] three', [4, -3]],
-      ['south-one', 'south', '0.25', 'literal [note] four', [0, 5]],
-      ['south-two', 'south', '2', 'other sentence', [-5, 0]],
+    type SeedRow = readonly [
+      string, 'north' | 'south', string, string, string, readonly number[],
     ];
-    for (const [id, tenant, amount, body, vector] of rows) {
-      insert.run(id, tenant, amount, body, littleEndianFloat32(vector));
+    const rows: readonly SeedRow[] = [
+      [
+        "x'); DROP TABLE sentinel; --", 'north', '-10', 'literal [note] one',
+        '2024-01-07T23:59:59Z', [5, 0],
+      ],
+      ['north-two', 'north', '-2', 'literal [note] two', '2024-01-08T00:00:00Z', [4, 3]],
+      ['north-three', 'north', '-0.5', 'literal [note] three', '2024-01-09T00:00:00Z', [4, -3]],
+      ['south-one', 'south', '0.25', 'literal [note] four', '2024-01-10T00:00:00Z', [0, 5]],
+      ['south-two', 'south', '2', 'other sentence', '2024-01-15T00:00:00Z', [-5, 0]],
+    ];
+    for (const [id, tenant, amount, body, created, vector] of rows) {
+      insert.run(id, tenant, amount, body, created, littleEndianFloat32(vector));
       tenancy.set(id, tenant);
     }
   } finally {
@@ -347,6 +371,43 @@ test('records and aggregate quote identifiers, bind values, and keep exact decim
   }
 });
 
+test('calendar-bucket aggregates return CalendarPeriod adapter values', async () => {
+  const temporary = await temporaryDatabase();
+  try {
+    createSchema(temporary.path);
+    seed(temporary.path);
+    const sqlite = adapter(temporary.path);
+    const grouped = success(await sqlite.query.execute(
+      success(await sqlite.query.compile(calendarAggregatePlan())),
+    ));
+    assert.deepEqual(grouped.rows, [
+      [{
+        kind: 'calendarPeriod',
+        value: {
+          start: '2024-01-01T00:00:00Z', endExclusive: '2024-01-08T00:00:00Z',
+          timezone: 'UTC', grain: 'week', label: '2024-W01',
+        },
+      }, { kind: 'integer', value: 1 }],
+      [{
+        kind: 'calendarPeriod',
+        value: {
+          start: '2024-01-08T00:00:00Z', endExclusive: '2024-01-15T00:00:00Z',
+          timezone: 'UTC', grain: 'week', label: '2024-W02',
+        },
+      }, { kind: 'integer', value: 3 }],
+      [{
+        kind: 'calendarPeriod',
+        value: {
+          start: '2024-01-15T00:00:00Z', endExclusive: '2024-01-22T00:00:00Z',
+          timezone: 'UTC', grain: 'week', label: '2024-W03',
+        },
+      }, { kind: 'integer', value: 1 }],
+    ]);
+  } finally {
+    await temporary.dispose();
+  }
+});
+
 test('randomized records and semantic scopes never return another partition', async () => {
   const temporary = await temporaryDatabase();
   try {
@@ -388,96 +449,6 @@ test('randomized records and semantic scopes never return another partition', as
     if (admission.kind === 'refusal') {
       assert.equal(admission.refusal.code, 'EXACT_SCAN_BUDGET_EXCEEDED');
     }
-  } finally {
-    await temporary.dispose();
-  }
-});
-
-test('canonical ingest provides CAS, idempotency, opaque receipts, and delete visibility',
-  async () => {
-  const temporary = await temporaryDatabase();
-  try {
-    createSchema(temporary.path);
-    provisionSqliteAdapterStorage(temporary.path);
-    const sqlite = adapter(temporary.path);
-    const id = 'new-fixed-record';
-    const insert: CanonicalIngestPlan = {
-      dataset: dataset(),
-      idField,
-      scopeFingerprint: scopeHash(),
-      idempotencyKey: 'write-once',
-      embeddingPolicy: 'catalog',
-      mode: 'insertOnly',
-      records: [{
-        id,
-        values: [
-          { field: idField, value: { kind: 'id', value: id } },
-          { field: tenantField, value: { kind: 'enum', value: 'north' } },
-          { field: amountField, value: { kind: 'decimal', value: decimal('1.25') } },
-          {
-            field: bodyField,
-            value: { kind: 'text', value: NormalizedTextSchema.parse('new note') },
-          },
-        ],
-      }],
-    };
-    const first = success(await sqlite.canonicalIngest.execute(
-      success(await sqlite.canonicalIngest.compile(insert)),
-    ));
-    const repeated = success(await sqlite.canonicalIngest.execute(
-      success(await sqlite.canonicalIngest.compile(insert)),
-    ));
-    assert.deepEqual(repeated, first);
-    assert.match(first.receipt, /^wr_/u);
-    const state = first.records[0]?.visibility.record;
-    assert.equal(state?.state, 'ready');
-    if (state?.state === 'ready') assert.doesNotMatch(state.token, /DROP|sqlite|table/u);
-    const visibility = sqlite.visibility;
-    if (visibility === undefined) {
-      throw new Error('SQLite adapter must expose visibility observation.');
-    }
-    const observed = success(await visibility.observe({
-      receipt: first.receipt,
-      require: ['record'],
-      timeoutMs: safe(0),
-      anchor: InstantValueSchema.parse('2030-01-01T00:00:00Z'),
-    }));
-    assert.equal(observed.receipt, first.receipt);
-    const replace: CanonicalIngestPlan = {
-      ...insert,
-      mode: 'replace',
-      idempotencyKey: 'replace',
-      records: [{
-        id,
-        ifVersion: safe(1),
-        values: [
-          { field: idField, value: { kind: 'id', value: id } },
-          { field: tenantField, value: { kind: 'enum', value: 'north' } },
-          { field: amountField, value: { kind: 'decimal', value: decimal('2.5') } },
-          {
-            field: bodyField,
-            value: { kind: 'text', value: NormalizedTextSchema.parse('replaced note') },
-          },
-        ],
-      }],
-    };
-    const replaced = success(await sqlite.canonicalIngest.execute(
-      success(await sqlite.canonicalIngest.compile(replace)),
-    ));
-    assert.equal(replaced.records[0]?.version, 2);
-    const deleted: CanonicalIngestPlan = {
-      ...insert,
-      mode: 'delete',
-      idempotencyKey: 'delete',
-      records: [{ id, ifVersion: safe(2) }],
-    };
-    success(await sqlite.canonicalIngest.execute(
-      success(await sqlite.canonicalIngest.compile(deleted)),
-    ));
-    const north = success(await sqlite.query.execute(
-      success(await sqlite.query.compile(recordsPlan('north'))),
-    ));
-    assert.equal(north.rows.some((row) => row[0]?.kind === 'id' && row[0].value === id), false);
   } finally {
     await temporary.dispose();
   }

@@ -2,12 +2,14 @@ import { createHmac, randomBytes } from 'node:crypto';
 
 import type {
   CatalogPhysicalIdentifier,
+  IngestResult,
   VisibilityState,
   VisibilityToken,
   WriteReceipt,
   WriteReceiptId,
 } from '@agql/contracts';
-import { SafeIntegerSchema } from '@agql/schemas';
+import { ERROR_CODES, SafeIntegerSchema } from '@agql/schemas';
+import type { AgqlError } from '@agql/schemas';
 import type { PoolClient } from 'pg';
 
 import { quoteQualified } from './sql-identifiers.ts';
@@ -16,6 +18,7 @@ import type { PostgresAdapterConfig, PostgresDatasetBinding } from './types.ts';
 const IDEMPOTENCY = '_agql_idempotency' as CatalogPhysicalIdentifier;
 const RECEIPT_RECORDS = '_agql_receipt_records' as CatalogPhysicalIdentifier;
 const VISIBILITY = '_agql_visibility' as CatalogPhysicalIdentifier;
+const INGEST_RESULTS = '_agql_ingest_results' as CatalogPhysicalIdentifier;
 
 export type ReceiptAction = 'upsert' | 'delete' | 'embedding';
 
@@ -27,12 +30,8 @@ export interface StoredReceiptRecord {
   readonly action: ReceiptAction;
 }
 
-function randomOpaque(prefix: string): string {
-  return `${prefix}.${randomBytes(24).toString('base64url')}`;
-}
-
 export function newReceiptId(): WriteReceiptId {
-  return randomOpaque('wr.v1') as WriteReceiptId;
+  return `wr_${randomBytes(24).toString('base64url')}` as WriteReceiptId;
 }
 
 export function newVisibilityToken(
@@ -47,7 +46,7 @@ export function newVisibilityToken(
   const digest = createHmac('sha256', config.tokenSecret)
     .update(message, 'utf8')
     .digest('base64url');
-  return `visibility.v1.${nonce}.${digest}` as VisibilityToken;
+  return `opaque:${nonce}${digest}` as VisibilityToken;
 }
 
 export async function reserveIdempotency(
@@ -142,13 +141,135 @@ function decodeVisibility(
   code: string | null,
   message: string | null,
 ): VisibilityState | undefined {
-  if (state === 'accepted') return { state };
+  if (state === 'accepted' || state === 'pending') return { state };
   if (state === 'superseded') return { state };
   if (state === 'ready' && token !== null) return { state, token: token as VisibilityToken };
   if (state === 'failed' && code !== null && message !== null) {
     return { state, code, message };
   }
   return undefined;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function decodeError(value: unknown): AgqlError | undefined {
+  if (!isRecord(value) || typeof value.code !== 'string' || typeof value.message !== 'string'
+    || typeof value.path !== 'string' || !Array.isArray(value.alternatives)
+    || !value.alternatives.every((item) => typeof item === 'string')) return undefined;
+  const code = ERROR_CODES.find((candidate) => candidate === value.code);
+  if (code === undefined) return undefined;
+  if (code === 'REFERENCE_NOT_AVAILABLE') {
+    return value.alternatives.length === 0
+      ? { code, message: value.message, path: value.path, alternatives: [] }
+      : undefined;
+  }
+  const first = value.alternatives[0];
+  return first === undefined
+    ? undefined
+    : {
+      code,
+      message: value.message,
+      path: value.path,
+      alternatives: [first, ...value.alternatives.slice(1)],
+    };
+}
+
+function decodeIngestResult(value: string): IngestResult | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed) || !Array.isArray(parsed.outcomes) || !isRecord(parsed.writeReceipt)) {
+    return undefined;
+  }
+  const receiptValue = parsed.writeReceipt.receipt;
+  if (typeof receiptValue !== 'string'
+    || !Array.isArray(parsed.writeReceipt.records)) return undefined;
+  const records = parsed.writeReceipt.records;
+  const receiptRecords = [];
+  for (const record of records) {
+    if (!isRecord(record) || typeof record.id !== 'string' || typeof record.version !== 'number'
+      || !Number.isSafeInteger(record.version) || !isRecord(record.visibility)) return undefined;
+    const visibility: Record<string, VisibilityState> = Object.create(null) as
+      Record<string, VisibilityState>;
+    for (const [name, state] of Object.entries(record.visibility)) {
+      if (!isRecord(state) || typeof state.state !== 'string') return undefined;
+      const decoded = decodeVisibility(
+        state.state,
+        typeof state.token === 'string' ? state.token : null,
+        typeof state.code === 'string' ? state.code : null,
+        typeof state.message === 'string' ? state.message : null,
+      );
+      if (decoded === undefined) return undefined;
+      visibility[name] = decoded;
+    }
+    receiptRecords.push({
+      id: record.id,
+      version: SafeIntegerSchema.parse(record.version),
+      visibility,
+    });
+  }
+  const outcomes = [];
+  for (const outcome of parsed.outcomes) {
+    if (!isRecord(outcome) || typeof outcome.id !== 'string') return undefined;
+    if (outcome.status === 'accepted' && typeof outcome.version === 'number'
+      && Number.isSafeInteger(outcome.version) && outcome.error === null) {
+      outcomes.push({
+        id: outcome.id,
+        status: 'accepted' as const,
+        version: SafeIntegerSchema.parse(outcome.version),
+        error: null,
+      });
+      continue;
+    }
+    const error = outcome.status === 'refused' && outcome.version === null
+      ? decodeError(outcome.error)
+      : undefined;
+    if (error === undefined) return undefined;
+    outcomes.push({
+      id: outcome.id,
+      status: 'refused' as const,
+      version: null,
+      error,
+    });
+  }
+  const first = outcomes[0];
+  if (first === undefined) return undefined;
+  return {
+    outcomes: [first, ...outcomes.slice(1)],
+    writeReceipt: { receipt: receiptValue as WriteReceiptId, records: receiptRecords },
+  };
+}
+
+export async function storeIngestResult(
+  client: PoolClient,
+  config: PostgresAdapterConfig,
+  result: IngestResult,
+): Promise<void> {
+  const table = quoteQualified(config.namespace, INGEST_RESULTS);
+  await client.query(
+    `INSERT INTO ${table} (receipt_id, payload) VALUES ($1::text, $2::jsonb)`,
+    [result.writeReceipt.receipt, JSON.stringify(result)],
+  );
+}
+
+export async function loadIngestResult(
+  client: PoolClient,
+  config: PostgresAdapterConfig,
+  receipt: string,
+): Promise<IngestResult | undefined> {
+  const table = quoteQualified(config.namespace, INGEST_RESULTS);
+  const result = await client.query<[string]>({
+    text: `SELECT payload::text FROM ${table} WHERE receipt_id = $1::text`,
+    values: [receipt],
+    rowMode: 'array',
+  });
+  const payload = result.rows[0]?.[0];
+  return payload === undefined ? undefined : decodeIngestResult(payload);
 }
 
 export async function loadStoredReceiptRecords(
@@ -178,6 +299,22 @@ export async function loadStoredReceiptRecords(
     });
   }
   return records;
+}
+
+export async function receiptMatchesScope(
+  client: PoolClient,
+  config: PostgresAdapterConfig,
+  receipt: string,
+  scopeFingerprint: string,
+): Promise<boolean> {
+  const table = quoteQualified(config.namespace, IDEMPOTENCY);
+  const result = await client.query<[boolean]>({
+    text: `SELECT EXISTS (SELECT 1 FROM ${table} WHERE receipt_id = $1::text `
+      + 'AND scope_key = $2::text)',
+    values: [receipt, scopeFingerprint],
+    rowMode: 'array',
+  });
+  return result.rows[0]?.[0] === true;
 }
 
 export async function loadReceipt(

@@ -258,7 +258,9 @@ test('exact retrieval never silently downgrades when its scan budget is exceeded
   });
   assert.equal(firstError(result)?.code, 'EXACT_SCAN_BUDGET_EXCEEDED');
   assert.equal(firstError(result)?.path, '/search/accuracy');
-  assert.match(firstError(result)?.remedy ?? '', /Narrow/u);
+  const resultRemedy = firstError(result)?.remedy;
+  assert.equal(typeof resultRemedy, 'string');
+  if (typeof resultRemedy === 'string') assert.match(resultRemedy, /Narrow/u);
 });
 
 test('field policy is enforced independently for every operation surface', () => {
@@ -428,5 +430,9 @@ test('afterWrite refuses uncertified adapters and embedding-version mismatches',
     take: 1,
   }));
   assert.equal(firstError(migration)?.code, 'FRESHNESS_UNAVAILABLE');
-  assert.match(firstError(migration)?.remedy ?? '', /exact EmbeddingSpec/u);
+  const migrationRemedy = firstError(migration)?.remedy;
+  assert.equal(typeof migrationRemedy, 'string');
+  if (typeof migrationRemedy === 'string') {
+    assert.match(migrationRemedy, /exact EmbeddingSpec/u);
+  }
 });

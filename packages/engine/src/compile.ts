@@ -1,4 +1,5 @@
 import { ScopeSchema, validateCatalog } from '@agql/catalog';
+import type { ExpandedScope } from '@agql/contracts';
 import type {
   CapabilityProfile,
   QueryDocument,
@@ -22,6 +23,7 @@ import { validateDeploymentLimits } from './limits.ts';
 import { buildAggregatePlan } from './plan-aggregate.ts';
 import { buildRecordsPlan } from './plan-records.ts';
 import { buildRetrievePlan } from './plan-retrieve.ts';
+import { boundField } from './policy.ts';
 import { compileEffectiveFilter } from './predicates.ts';
 import { expandScope } from './scope.ts';
 import type {
@@ -57,6 +59,7 @@ function profileAvailable(context: CompileContext, profile: CapabilityProfile): 
 
 function validateAfterWrite(
   context: CompileContext,
+  scope: ExpandedScope,
 ): EngineResult<CompileOutput['afterWrite']> {
   const requirement = context.query.afterWrite;
   if (requirement === undefined) return { ok: true, value: undefined };
@@ -94,6 +97,8 @@ function validateAfterWrite(
       ['Name at least one required state.'],
     ));
   }
+  const idField = boundField(context, context.dataset.idField, '/from');
+  if (!idField.ok) return idField;
   return {
     ok: true,
     value: {
@@ -101,6 +106,14 @@ function validateAfterWrite(
       require: [first, ...requirement.require.slice(1)],
       timeoutMs: requirement.timeoutMs,
       anchor: context.input.anchor,
+      scopeFingerprint: context.scopeFingerprint,
+      scope,
+      dataset: {
+        logicalId: context.datasetId,
+        physical: context.binding.physical,
+        bindingVersion: context.input.binding.version,
+      },
+      idField: idField.value,
     },
   };
 }
@@ -209,10 +222,10 @@ export function compileQuery(input: CompileQueryInput): EngineResult<CompileOutp
   const profile = requiredProfile(context.query);
   const available = profileAvailable(context, profile);
   if (!available.ok) return available;
-  const afterWrite = validateAfterWrite(context);
-  if (!afterWrite.ok) return afterWrite;
   const expandedScope = expandScope(context);
   if (!expandedScope.ok) return expandedScope;
+  const afterWrite = validateAfterWrite(context, expandedScope.value);
+  if (!afterWrite.ok) return afterWrite;
   const filter = compileEffectiveFilter(context);
   if (!filter.ok) return filter;
   let planOutput: {

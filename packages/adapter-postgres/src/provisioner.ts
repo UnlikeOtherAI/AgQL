@@ -155,10 +155,12 @@ async function createControlTables(
     + 'dataset_physical text NOT NULL, record_id text NOT NULL, version bigint NOT NULL, '
     + 'action text NOT NULL CHECK (action IN (\'upsert\', \'delete\', \'embedding\')), '
     + 'PRIMARY KEY (receipt_id, dataset_physical, record_id))');
+  await client.query(`CREATE TABLE IF NOT EXISTS ${namespace}."_agql_ingest_results" (`
+    + 'receipt_id text PRIMARY KEY, payload jsonb NOT NULL)');
   await client.query(`CREATE TABLE IF NOT EXISTS ${namespace}."_agql_visibility" (`
     + 'dataset_physical text NOT NULL, record_id text NOT NULL, version bigint NOT NULL, '
     + 'state_name text NOT NULL, state text NOT NULL '
-    + 'CHECK (state IN (\'accepted\', \'ready\', \'failed\', \'superseded\')), '
+    + 'CHECK (state IN (\'accepted\', \'pending\', \'ready\', \'failed\', \'superseded\')), '
     + 'token text, code text, message text, '
     + 'PRIMARY KEY (dataset_physical, record_id, version, state_name))');
 }
@@ -170,7 +172,12 @@ async function grantControlTables(
   writerRole: string,
 ): Promise<void> {
   const namespace = quoteIdentifier(config.namespace);
-  const tables = ['_agql_idempotency', '_agql_receipt_records', '_agql_visibility']
+  const tables = [
+    '_agql_idempotency',
+    '_agql_receipt_records',
+    '_agql_ingest_results',
+    '_agql_visibility',
+  ]
     .map((name) => `${namespace}."${name}"`).join(', ');
   await client.query(`REVOKE ALL ON ${tables} FROM PUBLIC`);
   await client.query(`GRANT SELECT ON ${tables} TO ${queryRole}`);

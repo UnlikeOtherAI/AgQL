@@ -60,8 +60,13 @@ schema, verifies direct DML is denied to the query role, exercises MVCC reads,
 ingest/idempotency/receipts, pgvector writes, and randomized filtered ANN
 scope-leak probes, then removes the temporary schema and roles.
 
-The frozen `AdapterRow` type currently has no calendar-period value variant, so
-calendar-period aggregate plans are refused even though the PostgreSQL calendar
-compiler is implemented and tested with a bound timezone and Monday-start week.
-The shared receipt type also cannot express per-record CAS conflict outcomes;
-conflicting batches are therefore atomically refused.
+Calendar-period aggregates return result-only half-open periods with instant boundaries,
+timezone, grain, and label. The SQL compiler performs civil-time day, fiscal-day,
+catalog-week-start, and month bucketing before converting boundaries back to UTC instants.
+
+Canonical ingest compiles the expanded write scope into PostgreSQL predicates. Candidate
+whole-record values are checked through SQL before inserts/replacements, and existing-row scope is
+repeated on replacements and deletes. Per-record savepoints isolate CAS conflicts while preserving
+one ordered outcome per input record and one receipt containing only accepted records. Derived
+embedding visibility uses `pending` until the runtime-owned vector worker makes it `ready`, and a
+bounded observation deadline returns the distinct structured `AFTER_WRITE_TIMEOUT` result.

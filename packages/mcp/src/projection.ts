@@ -104,11 +104,15 @@ function projectObjectValue(
   if (field.kind === 'calendarPeriod'
     && typeof value.start === 'string'
     && typeof value.endExclusive === 'string'
-    && typeof value.timezone === 'string') {
+    && typeof value.timezone === 'string'
+    && typeof value.grain === 'string'
+    && typeof value.label === 'string') {
     return {
       start: value.start,
       endExclusive: value.endExclusive,
       timezone: value.timezone,
+      grain: value.grain,
+      label: value.label,
     } as ModelReleasedValue;
   }
   throw new TypeError(`The released value does not match schema field ${field.id}.`);
@@ -118,7 +122,7 @@ function projectValue(
   field: ResultSchemaField,
   value: ModelReleasedValue,
 ): ModelReleasedValue {
-  if (typeof value === 'object') return projectObjectValue(field, value);
+  if (value !== null && typeof value === 'object') return projectObjectValue(field, value);
   return value;
 }
 

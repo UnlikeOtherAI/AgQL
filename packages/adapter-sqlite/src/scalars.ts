@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 
 import {
   CanonicalDecimalSchema,
+  divideDecimal,
   DateValueSchema,
   InstantValueSchema,
   MoneyValueSchema,
@@ -11,11 +12,10 @@ import {
   compareMoney,
 } from '@agql/schemas';
 import type {
-  CalendarPeriod,
   CanonicalDecimal,
   SafeInteger,
 } from '@agql/schemas';
-import type { ResolvedFieldBinding, TypedValue } from '@agql/contracts';
+import type { CalendarPeriodValue, ResolvedFieldBinding, TypedValue } from '@agql/contracts';
 
 import type { SqliteParameter } from './types.ts';
 
@@ -182,73 +182,21 @@ export function decimalAverage(
   count: SafeInteger,
 ): CanonicalDecimal | undefined {
   if (count <= 0) return undefined;
-  return divideDecimalsExactly(sum, CanonicalDecimalSchema.parse(String(count)));
+  return divideDecimalsRounded(sum, CanonicalDecimalSchema.parse(String(count)));
 }
 
-export function divideDecimalsExactly(
+export function divideDecimalsRounded(
   numeratorValue: CanonicalDecimal,
   denominatorValue: CanonicalDecimal,
 ): CanonicalDecimal | undefined {
-  const numerator = decimalFraction(numeratorValue);
-  const denominator = decimalFraction(denominatorValue);
-  if (denominator.numerator === 0n) return undefined;
-  const fractionNumerator = numerator.numerator * denominator.denominator;
-  const fractionDenominator = numerator.denominator * denominator.numerator;
-  const negative = fractionNumerator < 0n !== fractionDenominator < 0n;
-  const unsignedNumerator = fractionNumerator < 0n ? -fractionNumerator : fractionNumerator;
-  const unsignedDenominator = fractionDenominator < 0n ? -fractionDenominator : fractionDenominator;
-  const divisor = greatestCommonDivisor(unsignedNumerator, unsignedDenominator);
-  let reducedDenominator = unsignedDenominator / divisor;
-  let twos = 0;
-  let fives = 0;
-  while (reducedDenominator % 2n === 0n) {
-    reducedDenominator /= 2n;
-    twos += 1;
-  }
-  while (reducedDenominator % 5n === 0n) {
-    reducedDenominator /= 5n;
-    fives += 1;
-  }
-  if (reducedDenominator !== 1n) return undefined;
-  const scale = Math.max(twos, fives);
-  const adjusted = unsignedNumerator / divisor
-    * (BigInt(2) ** BigInt(scale - twos))
-    * (BigInt(5) ** BigInt(scale - fives));
-  const sign = negative && adjusted !== 0n ? '-' : '';
-  const absolute = adjusted.toString();
-  if (scale === 0) return CanonicalDecimalSchema.parse(`${sign}${absolute}`);
-  const padded = absolute.padStart(scale + 1, '0');
-  return CanonicalDecimalSchema.parse(
-    `${sign}${padded.slice(0, -scale)}.${padded.slice(-scale)}`.replace(/\.0+$/u, ''),
-  );
+  const divided = divideDecimal(numeratorValue, denominatorValue, {
+    decimalPlaces: 9,
+    rounding: 'halfEven',
+  });
+  return divided.ok ? divided.value : undefined;
 }
 
-function decimalFraction(value: CanonicalDecimal): {
-  readonly numerator: bigint;
-  readonly denominator: bigint;
-} {
-  const negative = value.startsWith('-');
-  const unsigned = negative ? value.slice(1) : value;
-  const point = unsigned.indexOf('.');
-  const fraction = point < 0 ? '' : unsigned.slice(point + 1);
-  const digits = (point < 0 ? unsigned : unsigned.slice(0, point)) + fraction;
-  return {
-    numerator: BigInt(`${negative ? '-' : ''}${digits}`),
-    denominator: BigInt(10) ** BigInt(fraction.length),
-  };
-}
-
-function greatestCommonDivisor(left: bigint, right: bigint): bigint {
-  let first = left;
-  let second = right;
-  while (second !== 0n) {
-    const remainder = first % second;
-    first = second;
-    second = remainder;
-  }
-  return first;
-}
-
-export function calendarPeriodKey(period: CalendarPeriod): string {
-  return `${period.start}:${period.endExclusive}:${period.timezone}`;
+export function calendarPeriodKey(period: CalendarPeriodValue): string {
+  return `${period.start}:${period.endExclusive}:${period.timezone}:`
+    + `${period.grain}:${period.label}`;
 }

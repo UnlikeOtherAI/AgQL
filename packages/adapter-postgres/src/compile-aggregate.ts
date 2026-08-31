@@ -9,6 +9,7 @@ import type {
 import type { SafeInteger } from '@agql/schemas';
 
 import { refusal, unsafePlan } from './refusals.ts';
+import { calendarPeriodOutputSql, compileCalendarPeriodSql } from './calendar-sql.ts';
 import type { RuntimeRegistry } from './registry.ts';
 import { internalColumn, quoteQualified } from './sql-identifiers.ts';
 import { encodedOutputSql, validateContiguousSlots } from './sql-output.ts';
@@ -173,10 +174,19 @@ function compileOutputs(
   const groups: string[] = [];
   for (const dimension of plan.dimensions) {
     if (dimension.kind === 'calendarPeriod') {
-      throw new SqlCompilationError(
-        'Calendar-period rows are not representable by the frozen AdapterRow type.',
-        '/dimensions',
-      );
+      const period = compileCalendarPeriodSql(dimension, { ...context, alias: 'd' });
+      const sql = calendarPeriodOutputSql(period);
+      outputs.push({
+        slot: dimension.output.slot,
+        sql,
+        codec: {
+          kind: 'calendarPeriod',
+          timezone: dimension.timezone,
+          grain: dimension.grain,
+        },
+      });
+      groups.push(sql);
+      continue;
     }
     const field = context.registry.field(context.dataset, dimension.field);
     if (field === undefined) {
@@ -262,7 +272,7 @@ export function compileAggregate(
     if (plan.tieBreak.kind === 'dimensionTuple') {
       for (const field of plan.tieBreak.fields) {
         const dimension = plan.dimensions.find(
-          (item) => item.kind === 'field' && item.field.physical === field.physical,
+          (item) => item.field.physical === field.physical,
         );
         if (dimension === undefined) {
           throw new SqlCompilationError('A tie-break field is not a dimension.', '/order');

@@ -12,6 +12,8 @@ import type {
 import type { SafeInteger } from '@agql/schemas';
 import type { Pool } from 'pg';
 
+import type { RuntimeRegistry } from './registry.ts';
+
 export const POSTGRES_PROFILES = [
   'records.v0',
   'aggregate.v0',
@@ -87,7 +89,12 @@ export type OutputCodec =
   | ResolvedValueType
   | { readonly kind: 'rank' }
   | { readonly kind: 'aggregateInteger' }
-  | { readonly kind: 'aggregateDecimal' };
+  | { readonly kind: 'aggregateDecimal' }
+  | {
+    readonly kind: 'calendarPeriod';
+    readonly timezone: string;
+    readonly grain: 'day' | 'fiscalDay' | 'week' | 'month';
+  };
 
 export interface CompiledPostgresQuery {
   readonly operation: 'query';
@@ -107,6 +114,7 @@ export interface CompiledPostgresIngest {
   readonly operation: 'canonicalIngest';
   readonly plan: CanonicalIngestPlan;
   readonly dataset: PostgresDatasetBinding;
+  readonly registry: RuntimeRegistry;
   readonly operationDigest: string;
 }
 

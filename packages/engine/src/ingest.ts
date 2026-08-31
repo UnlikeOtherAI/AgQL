@@ -25,6 +25,7 @@ import {
   semanticError,
   unavailableReference,
 } from './errors.ts';
+import { expandScope } from './scope.ts';
 import type {
   CompileIngestInput,
   CompileIngestOutput,
@@ -281,6 +282,8 @@ export function compileIngest(input: CompileIngestInput): EngineResult<CompileIn
       ['Correct the dataset idField declaration.'],
     ));
   }
+  const expandedScope = expandScope({ dataset, binding, scope: scope.data });
+  if (!expandedScope.ok) return expandedScope;
   const base = {
     dataset: {
       logicalId: document.dataset,
@@ -289,15 +292,14 @@ export function compileIngest(input: CompileIngestInput): EngineResult<CompileIn
     },
     idField: idField.value,
     scopeFingerprint: fingerprintScope(scope.data),
+    scope: expandedScope.value,
     idempotencyKey: document.idempotencyKey,
     embeddingPolicy: 'catalog' as const,
   };
   let plan: CanonicalIngestPlan;
   if (document.mode === 'delete') {
     const records = [];
-    for (const [index, record] of document.records.entries()) {
-      const scoped = recordWithinScope(input, document, index, undefined);
-      if (!scoped.ok) return scoped;
+    for (const record of document.records) {
       records.push({ id: record.id, ...(record.ifVersion === undefined
         ? {}
         : { ifVersion: record.ifVersion }) });
