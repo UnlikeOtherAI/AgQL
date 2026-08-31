@@ -61,12 +61,33 @@ AgQL MCP Profile    the normative agent-facing protocol binding
 
 ## Status
 
-**Specification draft, reference implementation in progress.** The v0 RFC is
-frozen enough to build against; the TypeScript reference runtime, its adapters,
-and the conformance suites are being written now. Nothing here is stable yet —
-the acceptance gates in RFC §12 are what "v0" will mean, and they are
-deliberately falsifiable: if the reference implementation cannot pass them, the
-contract has not earned its complexity.
+**Specification draft; reference implementation running.** The v0 RFC is frozen
+enough to build against, the TypeScript runtime and its two adapters are
+implemented, and the conformance suites execute against both.
+
+Current conformance, measured against a live PostgreSQL + pgvector database:
+
+| Suite | Pass | Fail | Blocked |
+|---|---:|---:|---:|
+| encoding | 12 | 0 | 0 |
+| exact (SQLite) | 35 | 0 | 4 |
+| exact (PostgreSQL) | 35 | 0 | 4 |
+| portability (SQLite ↔ PostgreSQL) | 35 | 0 | 4 |
+| receipts | 11 | 0 | 0 |
+| retrieval | 3 | 0 | 4 |
+| security probes (per adapter) | 13 | 0 | 0 |
+| **total** | **157** | **0** | **16** |
+
+Thirty-five exact fixtures return byte-identical results across two materially
+different adapters, and 6,656 seeded adversarial security cases find zero
+authorization violations. The 16 blocked fixtures are honest gaps, not skips:
+three calendar aggregates and decimal precision/scale boundaries, plus the four
+retrieval filter-selectivity families whose recall thresholds RFC §11 says must
+come from first cross-adapter measurement rather than being invented up front.
+
+Nothing here is stable yet. The acceptance gates in RFC §12 are what "v0" will
+mean, and they are deliberately falsifiable: if the reference implementation
+cannot pass them, the contract has not earned its complexity.
 
 ## Deployment
 
