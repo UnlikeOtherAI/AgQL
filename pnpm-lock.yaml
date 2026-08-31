@@ -74,6 +74,18 @@ importers:
 
   packages/conformance:
     dependencies:
+      '@agql/adapter-sqlite':
+        specifier: workspace:*
+        version: link:../adapter-sqlite
+      '@agql/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      '@agql/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@agql/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@agql/schemas':
         specifier: workspace:*
         version: link:../schemas

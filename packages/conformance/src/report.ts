@@ -25,6 +25,14 @@ export interface SuiteReport {
 export interface ConformanceReport {
   readonly suites: readonly SuiteReport[];
   readonly totals: OutcomeTotals;
+  readonly deferred: readonly CoverageNotice[];
+}
+
+export interface CoverageNotice {
+  readonly suite: string;
+  readonly fixtureCount: number;
+  readonly capability: string;
+  readonly extension: string;
 }
 
 interface MutableOutcomeTotals {
@@ -60,6 +68,7 @@ interface RenderedSuite {
 interface RenderedReport {
   readonly totals: OutcomeTotals;
   readonly suites: readonly RenderedSuite[];
+  readonly deferred: readonly CoverageNotice[];
 }
 
 function compareText(left: string, right: string): number {
@@ -172,12 +181,15 @@ export function createSuiteReport(
   };
 }
 
-export function createConformanceReport(suites: readonly SuiteReport[]): ConformanceReport {
+export function createConformanceReport(
+  suites: readonly SuiteReport[],
+  deferred: readonly CoverageNotice[] = [],
+): ConformanceReport {
   assertUniqueSuiteNames(suites);
   const orderedSuites = sortedSuites(suites);
   const totals = emptyTotals();
   for (const suite of orderedSuites) sumTotals(totals, suite.totals);
-  return { suites: orderedSuites, totals: readonlyTotals(totals) };
+  return { suites: orderedSuites, totals: readonlyTotals(totals), deferred };
 }
 
 function isNonPassFixture(
@@ -214,6 +226,7 @@ function renderedFixture(fixture: FixtureResult & {
 function renderedReport(report: ConformanceReport): RenderedReport {
   return {
     totals: report.totals,
+    deferred: report.deferred,
     suites: sortedSuites(report.suites).map((suite): RenderedSuite => ({
       name: suite.name,
       totals: suite.totals,
@@ -246,6 +259,10 @@ export function renderTextReport(report: ConformanceReport): string {
         lines.push(`    diff: ${diagnostic.diff}`);
       }
     }
+  }
+  for (const notice of report.deferred) {
+    lines.push(`deferred suite=${notice.suite} total=${notice.fixtureCount} `
+      + `capability=${notice.capability} extension=${notice.extension}`);
   }
   return `${lines.join('\n')}\n`;
 }

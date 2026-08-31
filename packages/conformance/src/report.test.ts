@@ -73,6 +73,18 @@ test('aggregate reports count all four outcomes and preserve every non-pass diag
   assert.doesNotMatch(json, /"alpha\/pass"/u);
 });
 
+test('deferred suites are visible without being counted as fixture outcomes', () => {
+  const report = createConformanceReport([], [{
+    suite: 'receipts',
+    fixtureCount: 11,
+    capability: 'receipt-visibility-state-machine',
+    extension: 'ReceiptSuiteExtension',
+  }]);
+  assert.equal(report.totals.total, 0);
+  assert.match(renderTextReport(report), /deferred suite=receipts total=11/u);
+  assert.match(renderJsonReport(report), /"fixtureCount":11/u);
+});
+
 test('renderers are deterministic across input and diagnostic order', () => {
   const first = fixtureResult('suite/b', rule, fail([
     diagnostic('suite/b', 'second'),
@@ -83,6 +95,7 @@ test('renderers are deterministic across input and diagnostic order', () => {
   const reportRight = {
     totals: reportLeft.totals,
     suites: [...reportLeft.suites].reverse(),
+    deferred: reportLeft.deferred,
   };
 
   assert.equal(renderTextReport(reportLeft), renderTextReport(reportRight));

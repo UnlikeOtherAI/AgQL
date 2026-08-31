@@ -6,9 +6,14 @@
   "exports": "./src/index.ts",
   "scripts": {
     "test": "tsx --test 'src/**/*.test.ts'",
-    "cli": "tsx src/cli.ts"
+    "conformance": "tsx src/cli.ts",
+    "conformance:exhaustive": "tsx src/cli.ts --tier exhaustive"
   },
   "dependencies": {
+    "@agql/adapter-sqlite": "workspace:*",
+    "@agql/catalog": "workspace:*",
+    "@agql/contracts": "workspace:*",
+    "@agql/engine": "workspace:*",
     "@agql/schemas": "workspace:*"
   },
   "devDependencies": {
