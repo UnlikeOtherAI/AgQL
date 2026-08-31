@@ -3,8 +3,17 @@ import type { FieldDocument } from '@agql/schemas';
 
 export function fieldResultShape(id: string, field: FieldDocument): ResultSchemaField {
   switch (field.kind) {
-    case 'money':
-      return { id, kind: 'money', currency: field.currency, nullable: field.nullable };
+    case 'money': {
+      const base = { id, kind: 'money' as const, nullable: field.nullable };
+      if (field.precision === undefined || field.scale === undefined
+        || field.currencies === undefined) return base;
+      return {
+        ...base,
+        precision: field.precision,
+        scale: field.scale,
+        currencies: field.currencies,
+      };
+    }
     case 'text':
       return { id, kind: 'text', collation: field.collation, nullable: field.nullable };
     case 'enum':
@@ -22,8 +31,17 @@ export function resolvedResultShape(
   nullable: boolean,
 ): ResultSchemaField {
   switch (type.kind) {
-    case 'money':
-      return { id, kind: 'money', currency: type.currency, nullable };
+    case 'money': {
+      const base = { id, kind: 'money' as const, nullable };
+      if (type.precision === undefined || type.scale === undefined
+        || type.currencies === undefined) return base;
+      return {
+        ...base,
+        precision: type.precision,
+        scale: type.scale,
+        currencies: type.currencies,
+      };
+    }
     case 'text':
       return { id, kind: 'text', collation: type.collation, nullable };
     case 'enum':

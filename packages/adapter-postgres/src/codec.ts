@@ -3,6 +3,7 @@ import {
   CanonicalDecimalSchema,
   DateValueSchema,
   InstantValueSchema,
+  MoneyValueSchema,
   NormalizedTextSchema,
   SafeIntegerSchema,
 } from '@agql/schemas';
@@ -27,6 +28,10 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value);
+}
+
 function decodeInteger(raw: unknown): TypedValue | undefined {
   const parsed = typeof raw === 'number' ? raw
     : typeof raw === 'string' && /^-?\d+$/u.test(raw) ? Number(raw)
@@ -35,13 +40,56 @@ function decodeInteger(raw: unknown): TypedValue | undefined {
   return result.success ? { kind: 'integer', value: result.data } : undefined;
 }
 
-function decodeDecimal(raw: unknown): TypedValue | undefined {
+function decodeDecimal(raw: unknown, scale?: number): TypedValue | undefined {
   const value = stringValue(raw);
   if (value === undefined) return undefined;
   const canonical = canonicalNumeric(value);
   if (canonical === undefined) return undefined;
   const result = CanonicalDecimalSchema.safeParse(canonical);
-  return result.success ? { kind: 'decimal', value: result.data } : undefined;
+  if (!result.success) return undefined;
+  if (scale === undefined) return { kind: 'decimal', value: result.data };
+  const [integer, fraction = ''] = result.data.split('.');
+  const suffix = scale === 0 ? '' : `.${fraction.padEnd(scale, '0')}`;
+  return { kind: 'decimal', value: `${integer ?? '0'}${suffix}` as typeof result.data };
+}
+
+function decimalAtScale(value: string, scale: number | undefined): string | undefined {
+  const canonical = canonicalNumeric(value);
+  if (canonical === undefined || scale === undefined) return canonical;
+  const [integer, fraction = ''] = canonical.split('.');
+  return `${integer ?? '0'}${scale === 0 ? '' : `.${fraction.padEnd(scale, '0')}`}`;
+}
+
+type AggregateMoneyDecode =
+  | { readonly kind: 'value'; readonly value: AdapterResultValue }
+  | { readonly kind: 'mixed' }
+  | { readonly kind: 'invalid' };
+
+function decodeAggregateMoney(
+  raw: unknown,
+  codec: Extract<OutputCodec, { readonly kind: 'aggregateMoney' }>,
+): AggregateMoneyDecode {
+  const value = stringValue(raw);
+  if (value === undefined) return { kind: 'invalid' };
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(value) as unknown;
+  } catch {
+    return { kind: 'invalid' };
+  }
+  if (!isRecord(decoded) || !isUnknownArray(decoded.currencies)) return { kind: 'invalid' };
+  const currencies = decoded.currencies;
+  if (currencies.length !== 1) return { kind: 'mixed' };
+  const currency = currencies[0];
+  if (typeof decoded.amount !== 'string' || typeof currency !== 'string') {
+    return { kind: 'invalid' };
+  }
+  const amount = decimalAtScale(decoded.amount, codec.scale);
+  if (amount === undefined) return { kind: 'invalid' };
+  const money = MoneyValueSchema.safeParse({ amount, currency });
+  if (!money.success || (codec.currencies !== undefined
+    && !codec.currencies.includes(money.data.currency))) return { kind: 'invalid' };
+  return { kind: 'value', value: { kind: 'money', value: money.data } };
 }
 
 function instantAtPrecision(
@@ -61,12 +109,21 @@ export function decodeOutput(codec: OutputCodec, raw: unknown): AdapterResultVal
   if (raw === null) return { kind: 'null', value: null };
   if (codec.kind === 'rank' || codec.kind === 'aggregateInteger'
     || codec.kind === 'integer') return decodeInteger(raw);
-  if (codec.kind === 'aggregateDecimal' || codec.kind === 'decimal') return decodeDecimal(raw);
+  if (codec.kind === 'aggregateDecimal') return decodeDecimal(raw, codec.scale);
+  if (codec.kind === 'decimal') return decodeDecimal(raw, codec.scale);
   if (codec.kind === 'money') {
-    const decoded = decodeDecimal(raw);
-    return decoded?.kind === 'decimal'
-      ? { kind: 'money', value: { amount: decoded.value, currency: codec.currency } }
-      : undefined;
+    const value = stringValue(raw);
+    if (value === undefined) return undefined;
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(value) as unknown;
+    } catch {
+      return undefined;
+    }
+    const money = MoneyValueSchema.safeParse(decoded);
+    if (!money.success || (codec.currencies !== undefined
+      && !codec.currencies.includes(money.data.currency))) return undefined;
+    return { kind: 'money', value: money.data };
   }
   if (codec.kind === 'boolean') {
     return typeof raw === 'boolean' ? { kind: 'boolean', value: raw } : undefined;
@@ -117,15 +174,21 @@ export function decodeOutput(codec: OutputCodec, raw: unknown): AdapterResultVal
 }
 
 export interface DecodedRows {
+  readonly kind: 'success';
   readonly rows: readonly AdapterRow[];
   readonly ranks?: readonly ReturnType<typeof SafeIntegerSchema.parse>[];
   readonly truncated: boolean;
 }
 
+export interface DecodedMoneyMixed {
+  readonly kind: 'moneyMixed';
+  readonly path: string;
+}
+
 export function decodeRows(
   compiled: CompiledPostgresQuery,
   databaseRows: readonly (readonly unknown[])[],
-): DecodedRows | undefined {
+): DecodedRows | DecodedMoneyMixed | undefined {
   const rows: AdapterRow[] = [];
   const ranks: ReturnType<typeof SafeIntegerSchema.parse>[] = [];
   let total = 0;
@@ -133,6 +196,16 @@ export function decodeRows(
     const decoded: AdapterResultValue[] = [];
     for (let index = 0; index < compiled.outputCodecs.length; index += 1) {
       const codec = compiled.outputCodecs[index] ?? { kind: 'null' };
+      if (codec.kind === 'aggregateMoney') {
+        const money = decodeAggregateMoney(databaseRow[index], codec);
+        if (money.kind === 'mixed') {
+          if (codec.metricPath === undefined) return undefined;
+          return { kind: 'moneyMixed', path: codec.metricPath };
+        }
+        if (money.kind === 'invalid') return undefined;
+        decoded.push(money.value);
+        continue;
+      }
       const value = decodeOutput(codec, databaseRow[index]);
       if (value === undefined) return undefined;
       decoded.push(value);
@@ -148,6 +221,7 @@ export function decodeRows(
     rows.push(decoded);
   }
   return {
+    kind: 'success',
     rows,
     ...(compiled.rankColumn === undefined ? {} : { ranks }),
     truncated: total > rows.length,

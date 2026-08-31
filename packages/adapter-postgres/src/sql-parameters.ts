@@ -5,6 +5,7 @@ import {
   InstantValueSchema,
   NormalizedTextSchema,
   SafeIntegerSchema,
+  canonicalizeJcs,
 } from '@agql/schemas';
 
 import type { PgParameter } from './types.ts';
@@ -13,6 +14,7 @@ type SqlCast =
   | 'bigint'
   | 'boolean'
   | 'date'
+  | 'jsonb'
   | 'numeric'
   | 'text'
   | 'timestamptz'
@@ -39,7 +41,8 @@ export interface EncodedScalar {
 function castForField(field: ResolvedFieldBinding): EncodedScalar['cast'] {
   if (field.type.kind === 'boolean') return 'boolean';
   if (field.type.kind === 'integer') return 'bigint';
-  if (field.type.kind === 'decimal' || field.type.kind === 'money') return 'numeric';
+  if (field.type.kind === 'decimal') return 'numeric';
+  if (field.type.kind === 'money') return 'jsonb';
   if (field.type.kind === 'date') return 'date';
   if (field.type.kind === 'instant') return 'timestamptz';
   return 'text';
@@ -61,9 +64,10 @@ function encodeNonNull(field: ResolvedFieldBinding, value: TypedValue): EncodedS
     return { parameter: value.value, cast: 'numeric' };
   }
   if (field.type.kind === 'money' && value.kind === 'money'
-    && value.value.currency === field.type.currency
+    && (field.type.currencies === undefined
+      || field.type.currencies.includes(value.value.currency))
     && CanonicalDecimalSchema.safeParse(value.value.amount).success) {
-    return { parameter: value.value.amount, cast: 'numeric' };
+    return { parameter: canonicalizeJcs(value.value), cast: 'jsonb' };
   }
   if (field.type.kind === 'text' && value.kind === 'text'
     && NormalizedTextSchema.safeParse(value.value).success) {

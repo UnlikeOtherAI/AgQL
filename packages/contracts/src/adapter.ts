@@ -31,15 +31,28 @@ export type AdapterRefusalCode =
   | 'UNSUPPORTED_PROFILE'
   | 'SCOPE_UNENFORCEABLE'
   | 'EXACT_SCAN_BUDGET_EXCEEDED'
+  | 'EXACT_SCAN_LIMIT_EXCEEDED'
+  | 'MONEY_CURRENCY_MIXED'
   | 'FRESHNESS_UNAVAILABLE'
   | 'EMBEDDING_NOT_INDEXED'
   | 'FILTER_SHAPE_UNCERTIFIED'
   | 'COST_GATE_REFUSAL'
   | 'AFTER_WRITE_TIMEOUT';
 
+export interface ExactScanLimitRemedy {
+  readonly action: 'narrowEligibleSetOrRequestApproximate';
+  readonly details: {
+    readonly limit: SafeInteger;
+    readonly eligibleCount: SafeInteger;
+    readonly alternatives: readonly [string, ...string[]];
+  };
+}
+
+export type AdapterStandardRemedy = string | ExactScanLimitRemedy;
+
 export type AdapterRefusal =
   | (AgqlErrorBase<Exclude<AdapterRefusalCode, 'AFTER_WRITE_TIMEOUT'>> & {
-    readonly remedy: string;
+    readonly remedy?: AdapterStandardRemedy;
   })
   | {
     readonly code: 'AFTER_WRITE_TIMEOUT';

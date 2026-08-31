@@ -327,7 +327,10 @@ test('calendar-period aggregates compile and decode result-only CalendarPeriod r
     '2',
     '1',
   ]]);
-  assert.deepEqual(decoded?.rows, [[
+  if (decoded?.kind !== 'success') {
+    assert.fail('Expected calendar aggregation decoding to succeed.');
+  }
+  assert.deepEqual(decoded.rows, [[
     {
       kind: 'calendarPeriod',
       value: {

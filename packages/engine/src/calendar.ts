@@ -142,6 +142,8 @@ export function compileRelativeRange(
     }
     const numericAmount: number = amount;
     startDate = shift(anchorDate, -numericAmount, unit);
+    // `inLast` is inclusive of the explicit anchor, so use the next millisecond
+    // as its exclusive boundary.
     end = instant(new Date(anchorDate.getTime() + 1), path);
   } else {
     const parts = zonedParts(anchorDate, timezone);

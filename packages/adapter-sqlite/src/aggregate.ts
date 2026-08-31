@@ -6,6 +6,7 @@ import {
   addDecimal,
   addMoney,
 } from '@agql/schemas';
+import type { CanonicalDecimal } from '@agql/schemas';
 import type {
   AdapterExecutionResult,
   AdapterOutcome,
@@ -36,7 +37,11 @@ type SqliteRow = Readonly<Record<string, null | number | bigint | string | Uint8
 type SourceRow = ReadonlyMap<string, TypedValue>;
 
 class AggregateCapabilityError extends Error {
-  constructor(message: string, readonly path: '/dimensions' | '/metrics' = '/metrics') {
+  constructor(
+    message: string,
+    readonly path = '/metrics',
+    readonly code: 'MONEY_CURRENCY_MIXED' | 'UNSUPPORTED_PROFILE' = 'UNSUPPORTED_PROFILE',
+  ) {
     super(message);
   }
 }
@@ -203,6 +208,13 @@ function numericFieldValues(
     .filter((value) => !isNull(value));
 }
 
+function decimalAtScale(value: TypedValue, scale: number | undefined): TypedValue {
+  if (value.kind !== 'decimal' || scale === undefined) return value;
+  const [integer, fraction = ''] = value.value.split('.');
+  const suffix = scale === 0 ? '' : `.${fraction.padEnd(scale, '0')}`;
+  return { kind: 'decimal', value: `${integer ?? '0'}${suffix}` as CanonicalDecimal };
+}
+
 function sumValues(valuesToSum: readonly TypedValue[]): TypedValue {
   const first = valuesToSum[0];
   if (first === undefined) return { kind: 'null', value: null };
@@ -230,7 +242,13 @@ function sumValues(valuesToSum: readonly TypedValue[]): TypedValue {
     for (const item of valuesToSum.slice(1)) {
       if (item.kind !== 'money') throw new TypeError('Aggregate field kinds must match.');
       const added = addMoney(sum, item.value);
-      if (!added.ok) throw new AggregateCapabilityError('Money sum spans more than one currency.');
+      if (!added.ok) {
+        throw new AggregateCapabilityError(
+          'Money sum spans more than one currency.',
+          '/metrics',
+          'MONEY_CURRENCY_MIXED',
+        );
+      }
       sum = added.value;
     }
     return { kind: 'money', value: sum };
@@ -280,8 +298,16 @@ function aggregateValue(
     const distinct = new Set(fieldValues.map(typedValueKey));
     return { kind: 'integer', value: SafeIntegerSchema.parse(distinct.size) };
   }
-  if (expression.op === 'sum') return sumValues(fieldValues);
-  if (expression.op === 'avg') return averageValues(fieldValues);
+  if (expression.op === 'sum') return decimalAtScale(
+    sumValues(fieldValues),
+    expression.field.type.kind === 'decimal' ? expression.field.type.scale : undefined,
+  );
+  if (expression.op === 'avg') return decimalAtScale(
+    averageValues(fieldValues),
+    expression.field.type.kind === 'decimal'
+      ? Math.max(expression.field.type.scale ?? 9, 9)
+      : undefined,
+  );
   const first = fieldValues[0];
   if (first === undefined) return { kind: 'null', value: null };
   return fieldValues.slice(1).reduce((best, item) => {
@@ -311,7 +337,7 @@ function metricValue(
   if (denominatorDecimal === '0') return { kind: 'null', value: null };
   const ratio = divideDecimalsRounded(numeratorDecimal, denominatorDecimal);
   if (ratio === undefined) throw new TypeError('A nonzero ratio denominator must divide.');
-  return { kind: 'decimal', value: ratio };
+  return decimalAtScale({ kind: 'decimal', value: ratio }, 9);
 }
 
 function outputMatches(
@@ -421,8 +447,20 @@ export function executeAggregate(
     const results: AggregateSortableResult[] = [];
     for (const group of groups.values()) {
       const valuesBySlot = new Map<number, AdapterResultValue>(group.dimensions);
-      for (const metric of compiled.plan.metrics) {
-        valuesBySlot.set(metric.output.slot, metricValue(metric, group.rows));
+      for (const [index, metric] of compiled.plan.metrics.entries()) {
+        try {
+          valuesBySlot.set(metric.output.slot, metricValue(metric, group.rows));
+        } catch (caught: unknown) {
+          if (caught instanceof AggregateCapabilityError
+            && caught.code === 'MONEY_CURRENCY_MIXED') {
+            throw new AggregateCapabilityError(
+              caught.message,
+              `/metrics/${index}`,
+              'MONEY_CURRENCY_MIXED',
+            );
+          }
+          throw caught;
+        }
       }
       if (havingMatches(valuesBySlot, compiled.plan.having)) {
         results.push({
@@ -444,6 +482,17 @@ export function executeAggregate(
     };
   } catch (caught: unknown) {
     if (caught instanceof AggregateCapabilityError) {
+      if (caught.code === 'MONEY_CURRENCY_MIXED') {
+        return {
+          kind: 'refusal',
+          refusal: {
+            code: 'MONEY_CURRENCY_MIXED',
+            message: 'The money aggregate contains more than one currency.',
+            path: caught.path,
+            alternatives: ['Group by a catalog field that separates currencies.'],
+          },
+        };
+      }
       return {
         kind: 'refusal',
         refusal: {

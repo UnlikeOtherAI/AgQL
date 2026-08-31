@@ -84,14 +84,28 @@ export async function executeQuery(
       const parsed = SafeIntegerSchema.safeParse(
         typeof rawCount === 'string' ? Number(rawCount) : Number.NaN,
       );
-      if (!parsed.success || parsed.data > compiled.exactAdmissionLimit) {
+      if (!parsed.success) {
+        await rollback(client);
+        return backendRefusal();
+      }
+      if (parsed.data > compiled.exactAdmissionLimit) {
         await rollback(client);
         return refusal(
-          'EXACT_SCAN_BUDGET_EXCEEDED',
-          'The eligible set exceeds the PostgreSQL exact-scan admission limit.',
+          'EXACT_SCAN_LIMIT_EXCEEDED',
+          'The exact eligible set exceeds the admitted scan limit.',
           '/search/accuracy',
-          ['Use approximate accuracy or narrow the effective filter.'],
-          'Narrow eligibility or select an approximate logical quality profile.',
+          ['Add a selective where predicate.', 'Request approximate accuracy if policy permits.'],
+          {
+            action: 'narrowEligibleSetOrRequestApproximate',
+            details: {
+              limit: compiled.exactAdmissionLimit,
+              eligibleCount: parsed.data,
+              alternatives: [
+                'Add a selective where predicate.',
+                'Request approximate accuracy if policy permits.',
+              ],
+            },
+          },
         );
       }
     }
@@ -113,6 +127,18 @@ export async function executeQuery(
     if (decoded === undefined) {
       await rollback(client);
       return backendRefusal();
+    }
+    if (decoded.kind === 'moneyMixed') {
+      await rollback(client);
+      return {
+        kind: 'refusal',
+        refusal: {
+          code: 'MONEY_CURRENCY_MIXED',
+          message: 'The money aggregate contains more than one currency.',
+          path: decoded.path,
+          alternatives: ['Group by a catalog field that separates currencies.'],
+        },
+      };
     }
     await client.query('COMMIT');
     return {

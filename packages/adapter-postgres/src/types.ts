@@ -89,7 +89,13 @@ export type OutputCodec =
   | ResolvedValueType
   | { readonly kind: 'rank' }
   | { readonly kind: 'aggregateInteger' }
-  | { readonly kind: 'aggregateDecimal' }
+  | { readonly kind: 'aggregateDecimal'; readonly scale?: number }
+  | {
+    readonly kind: 'aggregateMoney';
+    readonly currencies?: readonly string[];
+    readonly scale?: number;
+    readonly metricPath?: string;
+  }
   | {
     readonly kind: 'calendarPeriod';
     readonly timezone: string;

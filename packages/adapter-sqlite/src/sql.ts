@@ -134,6 +134,40 @@ function moneyAmountColumn(column: string): string {
   return `json_extract(${column}, '$.amount')`;
 }
 
+function instantRangeColumn(field: ResolvedFieldBinding): string {
+  if (field.type.kind !== 'instant') {
+    throw new TypeError('Instant range fields must have instant bindings.');
+  }
+  const column = quoteIdentifier(field.physical);
+  const seconds = `substr(${column}, 1, 19)`;
+  if (field.type.precision === 'second') return seconds;
+  const digits = field.type.precision === 'millisecond'
+    ? 3
+    : field.type.precision === 'microsecond' ? 6 : 9;
+  const fraction = `CASE WHEN substr(${column}, 20, 1) = '.' THEN `
+    + `substr(${column}, 21, length(${column}) - 21) ELSE '' END`;
+  return `(${seconds} || '.' || substr(${fraction} || '${'0'.repeat(digits)}', 1, ${digits}))`;
+}
+
+function instantRangeBoundary(
+  value: string,
+  precision: Extract<ResolvedFieldBinding['type'], { readonly kind: 'instant' }>['precision'],
+): string {
+  const instant = new Date(value);
+  if (!Number.isFinite(instant.getTime())) {
+    throw new TypeError('Instant range boundary must be a valid UTC instant.');
+  }
+  if (precision === 'second' && instant.getUTCMilliseconds() !== 0) {
+    instant.setTime(instant.getTime() + 1_000 - instant.getUTCMilliseconds());
+  }
+  const canonical = instant.toISOString();
+  const seconds = canonical.slice(0, 19);
+  if (precision === 'second') return seconds;
+  const digits = precision === 'millisecond' ? 3 : precision === 'microsecond' ? 6 : 9;
+  const milliseconds = canonical.slice(20, 23);
+  return `${seconds}.${milliseconds.padEnd(digits, '0')}`;
+}
+
 function comparisonSql(
   field: ResolvedFieldBinding,
   operator: 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte',
@@ -155,7 +189,8 @@ function comparisonSql(
     };
   }
   if (field.type.kind === 'money' && value.kind === 'money') {
-    if (value.value.currency !== field.type.currency) {
+    if (field.type.currencies !== undefined
+      && !field.type.currencies.includes(value.value.currency)) {
       return { sql: operator === 'ne' ? '1 = 1' : '0 = 1', parameters: [] };
     }
     const amount = moneyAmountColumn(column);
@@ -249,10 +284,16 @@ function predicateSql(predicate: ResolvedPredicate): {
     return substringSql(predicate.field, predicate.op, predicate.value);
   }
   if (predicate.kind === 'instantRange') {
-    const column = comparisonColumn(predicate.field);
+    if (predicate.field.type.kind !== 'instant') {
+      throw new TypeError('Instant range fields must have instant bindings.');
+    }
+    const column = instantRangeColumn(predicate.field);
     return {
       sql: `(${column} IS NOT NULL AND ${column} >= ? AND ${column} < ?)`,
-      parameters: [predicate.startInclusive, predicate.endExclusive],
+      parameters: [
+        instantRangeBoundary(predicate.startInclusive, predicate.field.type.precision),
+        instantRangeBoundary(predicate.endExclusive, predicate.field.type.precision),
+      ],
     };
   }
   return listSql(predicate);

@@ -70,7 +70,8 @@ function fieldTypeSql(
   let type: string;
   if (field.type.kind === 'boolean') type = 'boolean';
   else if (field.type.kind === 'integer') type = 'bigint';
-  else if (field.type.kind === 'decimal' || field.type.kind === 'money') type = 'numeric';
+  else if (field.type.kind === 'decimal') type = 'numeric';
+  else if (field.type.kind === 'money') type = 'jsonb';
   else if (field.type.kind === 'date') type = 'date';
   else if (field.type.kind === 'instant') {
     if (field.type.precision === 'nanosecond') return undefined;

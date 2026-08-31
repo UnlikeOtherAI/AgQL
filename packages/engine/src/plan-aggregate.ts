@@ -59,6 +59,11 @@ function averageType(type: ResolvedValueType): ResolvedValueType {
   return type.kind === 'integer' ? { kind: 'decimal' } : type;
 }
 
+function fixedCurrency(type: ResolvedValueType): string | undefined {
+  if (type.kind !== 'money' || type.currencies?.length !== 1) return undefined;
+  return type.currencies[0];
+}
+
 function compileAggregateExpression(
   context: CompileContext,
   expression: AggregateExpression,
@@ -341,11 +346,13 @@ export function buildAggregatePlan(
         ));
       }
       const numericKinds = new Set(['integer', 'decimal', 'money']);
+      const numeratorCurrency = fixedCurrency(numerator.type);
+      const denominatorCurrency = fixedCurrency(denominator.type);
       if (!numericKinds.has(numerator.type.kind)
         || !numericKinds.has(denominator.type.kind)
         || (numerator.type.kind === 'money'
           && denominator.type.kind === 'money'
-          && numerator.type.currency !== denominator.type.currency)
+          && numeratorCurrency !== denominatorCurrency)
         || ((numerator.type.kind === 'money') !== (denominator.type.kind === 'money'))) {
         return fail(semanticError(
           'ratio requires compatible numeric aggregate operands.',
@@ -440,7 +447,7 @@ export function buildAggregatePlan(
         },
         scope,
         ...(filter === undefined ? {} : { filter }),
-        hardRowLimit: query.take,
+        hardRowLimit: context.scope.budgets.maximumExactScanRecords,
         take: query.take,
         dimensions,
         metrics: [firstMetric, ...metrics.slice(1)],

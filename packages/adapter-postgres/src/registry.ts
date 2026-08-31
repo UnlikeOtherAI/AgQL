@@ -12,13 +12,23 @@ import type {
   PostgresQualityProfile,
 } from './types.ts';
 
+function sameCurrencySet(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return left.length === right.length && left.every((currency, index) => currency === right[index]);
+}
+
 function sameType(
   left: ResolvedFieldBinding['type'],
   right: ResolvedFieldBinding['type'],
 ): boolean {
   if (left.kind !== right.kind) return false;
   if (left.kind === 'money' && right.kind === 'money') {
-    return left.currency === right.currency;
+    return left.precision === right.precision
+      && left.scale === right.scale
+      && sameCurrencySet(left.currencies, right.currencies);
   }
   if (left.kind === 'text' && right.kind === 'text') {
     return left.collation.id === right.collation.id

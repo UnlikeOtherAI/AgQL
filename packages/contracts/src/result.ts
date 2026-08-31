@@ -56,7 +56,12 @@ export type ResultSchemaField =
   | (ResultSchemaFieldBase & {
     readonly kind: 'id' | 'boolean' | 'integer' | 'decimal' | 'date' | 'null' | 'rank';
   })
-  | (ResultSchemaFieldBase & { readonly kind: 'money'; readonly currency: CurrencyCode })
+  | (ResultSchemaFieldBase & {
+    readonly kind: 'money';
+    readonly precision?: number;
+    readonly scale?: number;
+    readonly currencies?: readonly CurrencyCode[];
+  })
   | (ResultSchemaFieldBase & {
     readonly kind: 'text';
     readonly collation: { readonly id: string; readonly version: string };

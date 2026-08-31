@@ -50,8 +50,14 @@ export interface ResolvedFieldBinding {
 }
 
 export type ResolvedValueType =
-  | { readonly kind: 'id' | 'boolean' | 'integer' | 'decimal' | 'date' | 'null' }
-  | { readonly kind: 'money'; readonly currency: CurrencyCode }
+  | { readonly kind: 'id' | 'boolean' | 'integer' | 'date' | 'null' }
+  | { readonly kind: 'decimal'; readonly precision?: number; readonly scale?: number }
+  | {
+    readonly kind: 'money';
+    readonly precision?: number;
+    readonly scale?: number;
+    readonly currencies?: readonly CurrencyCode[];
+  }
   | {
     readonly kind: 'text';
     readonly collation: { readonly id: string; readonly version: string };

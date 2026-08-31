@@ -1,11 +1,16 @@
-import type { AdapterOutcome, AdapterRefusal, AdapterRefusalCode } from '@agql/contracts';
+import type {
+  AdapterOutcome,
+  AdapterRefusal,
+  AdapterRefusalCode,
+  AdapterStandardRemedy,
+} from '@agql/contracts';
 
 export function refusal<T>(
   code: Exclude<AdapterRefusalCode, 'AFTER_WRITE_TIMEOUT'>,
   message: string,
   path: string,
   alternatives: AdapterRefusal['alternatives'],
-  remedy: string,
+  remedy: AdapterStandardRemedy,
 ): AdapterOutcome<T> {
   return {
     kind: 'refusal',

@@ -239,14 +239,6 @@ function semanticCompilation(
       'Regenerate the query vector for the resolved EmbeddingSpec.',
     );
   }
-  if (plan.search.hardCandidateLimit > options.exactScanAdmissionLimit) {
-    return refusal(
-      'EXACT_SCAN_BUDGET_EXCEEDED',
-      'The plan candidate bound exceeds this adapter’s exact-scan admission limit.',
-      '/search/accuracy',
-      'Narrow the predicate or use a source with a larger exact-scan admission limit.',
-    );
-  }
   if (plan.take > plan.search.hardCandidateLimit) {
     return refusal(
       'EXACT_SCAN_BUDGET_EXCEEDED',
@@ -289,12 +281,13 @@ function semanticCompilation(
         + `) AS ${quoteRuntimeIdentifier('bounded_eligible')}`,
       countParameters: [
         ...where.parameters,
-        BigInt(plan.search.hardCandidateLimit) + 1n,
+        BigInt(Math.min(plan.search.hardCandidateLimit, options.exactScanAdmissionLimit)) + 1n,
       ],
       sql: `SELECT ${selected.join(', ')} FROM ${table} WHERE ${eligibility}`
         + ` ORDER BY ${quoteIdentifier(plan.stableId.physical)} COLLATE BINARY ASC LIMIT ?`,
       parameters: [...where.parameters, plan.search.hardCandidateLimit],
       projection,
+      exactAdmissionLimit: options.exactScanAdmissionLimit,
     },
   };
 }

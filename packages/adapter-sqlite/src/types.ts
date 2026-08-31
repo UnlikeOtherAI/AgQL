@@ -48,6 +48,7 @@ export interface CompiledSemanticQuery {
   readonly sql: string;
   readonly parameters: readonly SqliteParameter[];
   readonly projection: readonly ResolvedProjection[];
+  readonly exactAdmissionLimit: SafeInteger;
 }
 
 export interface CompiledCanonicalIngest {

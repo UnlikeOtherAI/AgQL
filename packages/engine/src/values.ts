@@ -20,7 +20,25 @@ import type { EngineResult } from './types.ts';
 export function resolvedValueType(field: FieldDocument): ResolvedValueType {
   switch (field.kind) {
     case 'money':
-      return { kind: 'money', currency: field.currency };
+      if (field.precision === undefined || field.scale === undefined
+        || field.currencies === undefined) {
+        return { kind: 'money' };
+      }
+      return {
+        kind: 'money',
+        precision: field.precision,
+        scale: field.scale,
+        currencies: field.currencies,
+      };
+    case 'decimal':
+      if (field.precision === undefined || field.scale === undefined) {
+        return { kind: 'decimal' };
+      }
+      return {
+        kind: 'decimal',
+        precision: field.precision,
+        scale: field.scale,
+      };
     case 'text':
       return { kind: 'text', collation: field.collation };
     case 'enum': {
@@ -89,7 +107,8 @@ export function typeLiteral(
     }
     case 'money': {
       const parsed = MoneyValueSchema.safeParse(literal);
-      if (!parsed.success || parsed.data.currency !== field.type.currency) {
+      if (!parsed.success || (field.type.currencies !== undefined
+        && !field.type.currencies.includes(parsed.data.currency))) {
         return invalidLiteral(field, path);
       }
       return { ok: true, value: { kind: 'money', value: parsed.data } };

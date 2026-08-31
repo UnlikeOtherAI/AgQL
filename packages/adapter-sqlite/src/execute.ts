@@ -244,6 +244,31 @@ export function executeSemantic(
         },
       };
     }
+    if (eligibleCount > compiled.exactAdmissionLimit) {
+      return {
+        kind: 'refusal',
+        refusal: {
+          code: 'EXACT_SCAN_LIMIT_EXCEEDED',
+          message: 'The exact eligible set exceeds the admitted scan limit.',
+          path: '/search/accuracy',
+          alternatives: [
+            'Add a selective where predicate.',
+            'Request approximate accuracy if policy permits.',
+          ],
+          remedy: {
+            action: 'narrowEligibleSetOrRequestApproximate',
+            details: {
+              limit: compiled.exactAdmissionLimit,
+              eligibleCount,
+              alternatives: [
+                'Add a selective where predicate.',
+                'Request approximate accuracy if policy permits.',
+              ],
+            },
+          },
+        },
+      };
+    }
     const ranked = [...candidateRows(rows(database, compiled.sql, compiled.parameters), compiled)]
       .sort(rankedOrder(compiled.plan.search.embedding.metric));
     const selected = ranked.slice(0, compiled.plan.take);
