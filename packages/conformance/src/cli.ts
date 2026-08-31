@@ -5,10 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { canonicalizeJcs } from '@agql/schemas';
 
 import { runEncodingSuite } from './encoding.ts';
-import { unavailableAdapterDriver } from './exact-driver.ts';
-import type { ExactAdapterDriver } from './exact-driver.ts';
 import { runExactSuite } from './exact.ts';
-import { deferredReceiptCoverage } from './extensions.ts';
 import { blocked, fixtureResult } from './outcomes.ts';
 import { runPortabilitySuite } from './portability.ts';
 import type { PortabilitySuiteExecution } from './portability.ts';
@@ -29,8 +26,10 @@ import {
 } from './security.ts';
 import type { SecurityReplay, SecurityTier } from './security.ts';
 import { createSqliteExactDriver } from './sqlite-exact-driver.ts';
+import { createPostgresExactDriver } from './postgres-exact-driver.ts';
+import { runReceiptSuite } from './receipts.ts';
 
-type SuiteName = 'encoding' | 'exact' | 'security' | 'retrieval' | 'portability';
+type SuiteName = 'encoding' | 'exact' | 'security' | 'retrieval' | 'portability' | 'receipts';
 type AdapterSelection = 'sqlite' | 'postgres' | 'both';
 
 interface CliOptions {
@@ -48,13 +47,14 @@ const ALL_SUITES: readonly SuiteName[] = [
   'security',
   'retrieval',
   'portability',
+  'receipts',
 ];
 
 const USAGE = `AgQL conformance runner
 
 Usage: pnpm conformance [options]
 
-  --suite <name[,name]>       encoding, exact, security, retrieval, portability, or all
+  --suite <name[,name]>       encoding, exact, security, retrieval, portability, receipts, or all
   --tier <fast|exhaustive>    security cases: 256/matrix or all 20,000/matrix
   --adapter <sqlite|postgres|both>
   --seed <8hex:caseIndex>     replay one security case exactly
@@ -142,14 +142,6 @@ function parseOptions(args: readonly string[]): CliOptions {
   };
 }
 
-function postgresDriver(): ExactAdapterDriver {
-  const urlConfigured = process.env.AGQL_CONFORMANCE_POSTGRES_URL !== undefined;
-  const reason = urlConfigured
-    ? 'PostgreSQL needs deployment role, namespace, collation, and binding configuration.'
-    : 'AGQL_CONFORMANCE_POSTGRES_URL is not configured.';
-  return unavailableAdapterDriver('postgres-pgvector', 'unconfigured', reason);
-}
-
 function singleAdapterPortability(adapter: AdapterSelection): SuiteReport {
   const id = 'portability.requires-two-adapters';
   const rule = 'RFC §12 gate 1 requires two materially different exact adapters.';
@@ -189,7 +181,7 @@ async function run(options: CliOptions): Promise<number> {
       portability = await runPortabilitySuite(
         corpusRoot,
         createSqliteExactDriver(),
-        postgresDriver(),
+        createPostgresExactDriver(),
       );
       suites.push(portability.report);
     } else {
@@ -204,7 +196,7 @@ async function run(options: CliOptions): Promise<number> {
         suites.push((await runExactSuite(corpusRoot, createSqliteExactDriver())).report);
       }
       if (options.adapter === 'postgres' || options.adapter === 'both') {
-        suites.push((await runExactSuite(corpusRoot, postgresDriver())).report);
+        suites.push((await runExactSuite(corpusRoot, createPostgresExactDriver())).report);
       }
     }
   }
@@ -222,8 +214,8 @@ async function run(options: CliOptions): Promise<number> {
     suites.push(retrieval.report);
     retrievalMeasurements = retrieval.measurements;
   }
-  const deferred = await deferredReceiptCoverage(corpusRoot);
-  const report = createConformanceReport(suites, [deferred]);
+  if (options.suites.has('receipts')) suites.push(await runReceiptSuite(corpusRoot));
+  const report = createConformanceReport(suites);
   if (options.json) {
     process.stdout.write(`${canonicalizeJcs({
       report,
