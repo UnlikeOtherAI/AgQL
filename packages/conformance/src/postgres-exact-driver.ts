@@ -222,6 +222,7 @@ function vector(value: JsonValue): string {
 
 async function seed(
   pool: Pool,
+  namespace: CatalogPhysicalIdentifier,
   catalog: CatalogDocument,
   bindings: readonly PostgresDatasetBinding[],
   source: readonly JsonValue[],
@@ -255,7 +256,8 @@ async function seed(
     const placeholders = columns.map((_column, index) => index >= vectorStart && index < vectorStart + binding.embeddings.length
       ? `$${index + 1}::vector` : `$${index + 1}`);
     await pool.query({
-      text: `INSERT INTO ${quoteIdentifier(binding.dataset.physical)} (${columns.map(quoteIdentifier).join(', ')}) VALUES (${placeholders.join(', ')})`,
+      text: `INSERT INTO ${quoteIdentifier(namespace)}.${quoteIdentifier(binding.dataset.physical)} `
+        + `(${columns.map(quoteIdentifier).join(', ')}) VALUES (${placeholders.join(', ')})`,
       values,
     });
   }
@@ -349,7 +351,8 @@ async function provisionFixture(fixture: ExactFixture, databaseUrl: string): Pro
       const outcome = await new PostgresProvisioner(provisionerConfig).provision({ binding });
       if (outcome.kind === 'refusal') throw new TypeError(`${outcome.code}: ${outcome.message}`);
     }
-    await seed(writerPool, catalog, bindings, arrayMember(fixture.value, 'seed', fixture.sourcePath));
+    await seed(writerPool, namespace, catalog, bindings,
+      arrayMember(fixture.value, 'seed', fixture.sourcePath));
     const adapterConfig: PostgresAdapterConfig = {
       queryPool: queryPool as PostgresAdapterConfig['queryPool'],
       writerPool: writerPool as PostgresAdapterConfig['writerPool'],

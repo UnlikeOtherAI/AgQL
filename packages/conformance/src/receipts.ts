@@ -243,7 +243,8 @@ function runFalseSuccess(fixture: JsonObject): FixtureResult {
     stringMember(fixture, 'id', '/'), stringMember(fixture, 'rule', '/'), pass());
 }
 
-function runFixture(fixture: JsonObject): FixtureResult {
+export function runReceiptFixture(value: JsonValue): FixtureResult {
+  const fixture = jsonObject(value, '/receipt-fixture');
   const id = stringMember(fixture, 'id', '/');
   if (id === 'receipts.monotonic-state-transitions') return runMonotonic(fixture);
   if (id === 'receipts.false-success-fails-conformance') return runFalseSuccess(fixture);
@@ -259,7 +260,7 @@ export async function runReceiptSuite(corpusRoot: string): Promise<SuiteReport> 
     file.endsWith('.json'));
   const results = await Promise.all(files.map(async (file) => {
     const fixture = await loadJsonFixture(file);
-    return runFixture(jsonObject(fixture.value, file));
+    return runReceiptFixture(fixture.value);
   }));
   return createSuiteReport('receipts', results);
 }

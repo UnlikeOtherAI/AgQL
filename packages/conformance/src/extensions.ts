@@ -5,6 +5,7 @@ import type { JsonValue } from '@agql/schemas';
 import type { ExactFixture } from './exact-fixtures.ts';
 import { discoverFiles } from './fixtures.ts';
 import type { FixtureResult } from './outcomes.ts';
+import { runReceiptFixture } from './receipts.ts';
 import type { CoverageNotice } from './report.ts';
 
 /**
@@ -14,6 +15,16 @@ import type { CoverageNotice } from './report.ts';
 export interface ReceiptSuiteExtension {
   readonly capability: 'receipt-visibility-state-machine';
   runFixture(fixture: JsonValue): Promise<FixtureResult>;
+}
+
+/** The receipt fixtures exercise the shared visibility state machine directly. */
+export function createReceiptSuiteExtension(): ReceiptSuiteExtension {
+  return {
+    capability: 'receipt-visibility-state-machine',
+    runFixture(fixture) {
+      return Promise.resolve(runReceiptFixture(fixture));
+    },
+  };
 }
 
 /**
