@@ -229,7 +229,7 @@ test('server listener protects MCP, HTTP, and principal channels', async () => {
     runtime: new TransportRuntime(),
     agentAuthenticator: new ServerAgentAuthenticator(
       new BearerKeyAuthenticator(['correct-key']),
-      new ApplicationScopeResolver(),
+      new ApplicationScopeResolver(['test']),
     ),
   });
   const base = await listen(application);

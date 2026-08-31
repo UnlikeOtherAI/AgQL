@@ -4,13 +4,11 @@ import {
 } from './service.ts';
 import {
   ConfigurationError,
-  loadCatalog,
-  readServerConfig,
+  loadServerConfiguration,
 } from './config.ts';
 
 async function main(): Promise<void> {
-  const config = readServerConfig();
-  const catalog = await loadCatalog(config.catalogPath);
+  const { config, catalog } = await loadServerConfiguration();
   const server = createDeploymentServer({ config, catalog });
   await server.listen(config.port);
   let stopping = false;

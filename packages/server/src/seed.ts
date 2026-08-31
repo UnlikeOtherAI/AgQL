@@ -11,8 +11,7 @@ import type { IngestDocument } from '@agql/schemas';
 import { createPostgresDeployment } from './bindings.ts';
 import {
   DEFAULT_SOURCE_ID,
-  loadCatalog,
-  readServerConfig,
+  loadServerConfiguration,
 } from './config.ts';
 import { DeterministicEmbedderRegistry, validateDeterministicCatalog } from './embedder.ts';
 import { ServerRuntime } from './runtime.ts';
@@ -75,8 +74,7 @@ function documents(rows: readonly SeedRecord[]): readonly IngestDocument[] {
 }
 
 async function main(): Promise<void> {
-  const config = readServerConfig();
-  const catalog = await loadCatalog(config.catalogPath);
+  const { config, catalog } = await loadServerConfiguration();
   validateDeterministicCatalog(catalog);
   const deployment = createPostgresDeployment(catalog, {
     databaseUrl: config.databaseUrl,
