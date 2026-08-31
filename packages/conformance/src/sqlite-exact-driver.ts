@@ -9,7 +9,7 @@ import {
 } from '@agql/adapter-sqlite';
 import type { EngineQueryAdapter, EngineError } from '@agql/engine';
 import { executeQuery } from '@agql/engine';
-import type { AdapterExecutionResult, AdapterOutcome, TypedValue } from '@agql/contracts';
+import type { AdapterExecutionResult, AdapterOutcome, AdapterResultValue } from '@agql/contracts';
 import {
   QUERY_LIMITS,
   SafeIntegerSchema,
@@ -211,9 +211,18 @@ function errorJson(error: EngineError): JsonValue {
   };
 }
 
-function typedJson(value: TypedValue): JsonValue {
+function typedJson(value: AdapterResultValue): JsonValue {
   if (value.kind === 'money') {
     return { amount: value.value.amount, currency: value.value.currency };
+  }
+  if (value.kind === 'calendarPeriod') {
+    return {
+      start: value.value.start,
+      endExclusive: value.value.endExclusive,
+      timezone: value.value.timezone,
+      grain: value.value.grain,
+      label: value.value.label,
+    };
   }
   return value.value;
 }
@@ -315,7 +324,12 @@ async function executeOnce(
           retrieve: SafeIntegerSchema.parse(QUERY_LIMITS.take.retrieve),
         },
       },
-      calendar: { timezone: 'UTC', weekStartsOn: 'monday' },
+      calendar: {
+        timezone: 'UTC',
+        timezoneDatabase: 'fixed-offset',
+        weekStart: 'monday',
+        fiscalDayStart: '00:00:00',
+      },
       binding: runtime.binding,
       adapter: counted.descriptor,
       costGate: {
