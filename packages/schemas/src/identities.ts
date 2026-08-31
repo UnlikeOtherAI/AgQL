@@ -50,6 +50,13 @@ export type ExecutionSnapshotIdentity =
   | { readonly kind: 'snapshot'; readonly value: string }
   | { readonly kind: 'watermark'; readonly value: string };
 
+export interface EmbeddingExecutionIdentity {
+  readonly reference: string;
+  readonly specVersion: string;
+  readonly model: { readonly id: string; readonly revision: string };
+  readonly inputTransformId: string;
+}
+
 export interface ExecutionIdentityInput {
   readonly effectivePlanHash: EffectivePlanHash;
   readonly bindingVersion: string;
@@ -57,9 +64,9 @@ export interface ExecutionIdentityInput {
   readonly adapterVersion: string;
   readonly anchor: InstantValue;
   readonly snapshot: ExecutionSnapshotIdentity;
-  readonly embeddingSpec?: string;
+  readonly embeddingSpec?: EmbeddingExecutionIdentity;
   readonly qualityProfile?: string;
-  readonly channelPolicy: string;
+  readonly channelPolicyFingerprint: string;
 }
 
 /** RFC §3 cache and audit identity for one fully bound execution. */
@@ -73,7 +80,7 @@ export function executionFingerprint(input: ExecutionIdentityInput): ExecutionFi
     snapshot: input.snapshot,
     ...(input.embeddingSpec === undefined ? {} : { embeddingSpec: input.embeddingSpec }),
     ...(input.qualityProfile === undefined ? {} : { qualityProfile: input.qualityProfile }),
-    channelPolicy: input.channelPolicy,
+    channelPolicy: input.channelPolicyFingerprint,
   })) as ExecutionFingerprint;
 }
 
@@ -81,4 +88,3 @@ export function executionFingerprint(input: ExecutionIdentityInput): ExecutionFi
 export function fingerprintScope(scope: unknown): ScopeFingerprint {
   return sha256(canonicalizeJcs(scope)) as ScopeFingerprint;
 }
-

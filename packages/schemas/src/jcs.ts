@@ -7,18 +7,25 @@ export type JsonValue =
   | readonly JsonValue[]
   | { readonly [key: string]: JsonValue };
 
-function assertWellFormedUnicode(value: string): void {
+export function isWellFormedUnicode(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
     if (code >= 0xd800 && code <= 0xdbff) {
       const next = value.charCodeAt(index + 1);
       if (!(next >= 0xdc00 && next <= 0xdfff)) {
-        throw new TypeError('JCS cannot canonicalize an unpaired UTF-16 high surrogate.');
+        return false;
       }
       index += 1;
     } else if (code >= 0xdc00 && code <= 0xdfff) {
-      throw new TypeError('JCS cannot canonicalize an unpaired UTF-16 low surrogate.');
+      return false;
     }
+  }
+  return true;
+}
+
+function assertWellFormedUnicode(value: string): void {
+  if (!isWellFormedUnicode(value)) {
+    throw new TypeError('JCS cannot canonicalize an unpaired UTF-16 surrogate.');
   }
 }
 

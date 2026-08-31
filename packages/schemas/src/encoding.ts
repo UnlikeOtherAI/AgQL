@@ -7,9 +7,11 @@ import {
 import {
   type AgqlError,
   type ErrorCode,
+  type LegalAlternatives,
   type ValidationResult,
   errorResult,
 } from './errors.ts';
+import { isWellFormedUnicode } from './jcs.ts';
 import type { JsonValue } from './jcs.ts';
 import { JsonDecodeFailure, StrictJsonParser } from './json-parser.ts';
 
@@ -28,7 +30,7 @@ export type InputEncoding = 'json' | 'agql-yaml';
 function encodingError(
   code: Exclude<ErrorCode, 'REFERENCE_NOT_AVAILABLE'>,
   message: string,
-  alternatives: readonly string[],
+  alternatives: LegalAlternatives,
 ): AgqlError {
   return { code, message, path: '', alternatives };
 }
@@ -201,7 +203,13 @@ function jsonTree(value: unknown, depth: number, maximumDepth: number): JsonValu
   if (depth > maximumDepth) {
     throw new JsonDecodeFailure('depth', 'The YAML document exceeds the depth limit.');
   }
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    if (!isWellFormedUnicode(value)) {
+      throw new JsonDecodeFailure('syntax', 'YAML strings must be valid Unicode.');
+    }
+    return value;
+  }
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
       throw new JsonDecodeFailure('syntax', 'YAML numeric scalars must be finite.');
@@ -212,11 +220,11 @@ function jsonTree(value: unknown, depth: number, maximumDepth: number): JsonValu
     return value.map((item) => jsonTree(item, depth + 1, maximumDepth));
   }
   if (typeof value === 'object') {
-    const result: Record<string, JsonValue> = {};
+    const entries: [string, JsonValue][] = [];
     for (const [key, item] of Object.entries(value)) {
-      result[key] = jsonTree(item, depth + 1, maximumDepth);
+      entries.push([key, jsonTree(item, depth + 1, maximumDepth)]);
     }
-    return result;
+    return Object.fromEntries(entries);
   }
   throw new JsonDecodeFailure('syntax', 'YAML values must round-trip through JSON.');
 }
@@ -231,11 +239,20 @@ export function decodeAgqlYaml(
   const fence = unwrapFence(encodedSource);
   if (!fence.ok) return fence;
   const source = fence.value;
-  const documents = parseAllDocuments(source, {
-    schema: 'core',
-    strict: true,
-    uniqueKeys: true,
-  });
+  let documents: ReturnType<typeof parseAllDocuments>;
+  try {
+    documents = parseAllDocuments(source, {
+      schema: 'core',
+      strict: true,
+      uniqueKeys: true,
+    });
+  } catch {
+    return errorResult(encodingError(
+      'ENCODING_SYNTAX',
+      'The AgQL-YAML parser could not construct one bounded core-schema document.',
+      ['Provide one valid, bounded YAML 1.2 core-schema document.'],
+    ));
+  }
   if ('empty' in documents || documents.length !== 1) {
     return errorResult(encodingError(
       'ENCODING_MULTIDOC_FORBIDDEN',

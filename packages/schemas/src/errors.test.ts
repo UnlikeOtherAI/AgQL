@@ -13,6 +13,7 @@ test('structural validation reports all issues in deterministic document order',
   assert.ok(errors.length > 1);
   assert.equal(errors[0].path, '/version');
   assert.equal(errors[0].code, 'STRUCTURAL_INVALID');
+  assert.deepEqual(errors[0].alternatives, ['0']);
 });
 
 test('unavailable references cannot carry hidden-name alternatives', () => {

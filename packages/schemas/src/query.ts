@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   AgqlLiteralSchema,
   NonnegativeSafeIntegerSchema,
+  NormalizedTextSchema,
   PositiveSafeIntegerSchema,
   SafeIntegerSchema,
 } from './values.ts';
@@ -47,7 +48,7 @@ const TextPredicateSchema = z.object({
   kind: z.literal('predicate'),
   field: ReferenceSchema,
   op: z.enum(['contains', 'startsWith']),
-  value: z.string(),
+  value: NormalizedTextSchema,
 }).strict();
 
 const InLastPredicateSchema = z.object({
@@ -235,7 +236,7 @@ export const AggregateQuerySchema = z.object({
 
 const SemanticSearchCoreShape = {
   using: ReferenceSchema,
-  text: z.string().min(1),
+  text: NormalizedTextSchema.pipe(z.string().min(1)),
   accuracy: z.enum(['exact', 'approximate']),
 };
 
@@ -249,12 +250,12 @@ const HybridSearchSchema = z.object({
   kind: z.literal('hybrid'),
   semantic: z.object({
     using: ReferenceSchema,
-    text: z.string().min(1),
+    text: NormalizedTextSchema.pipe(z.string().min(1)),
     accuracy: z.literal('approximate'),
   }).strict(),
   lexical: z.object({
     field: ReferenceSchema,
-    text: z.string().min(1),
+    text: NormalizedTextSchema.pipe(z.string().min(1)),
   }).strict(),
   fusion: z.literal('rrf-v0'),
   quality: ReferenceSchema,

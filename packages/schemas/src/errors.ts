@@ -27,12 +27,13 @@ export const ERROR_CODES = [
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
+export type LegalAlternatives = readonly [string, ...string[]];
 
 export interface AgqlErrorBase<C extends ErrorCode> {
   readonly code: C;
   readonly message: string;
   readonly path: string;
-  readonly alternatives: readonly string[];
+  readonly alternatives: LegalAlternatives;
 }
 
 /**
@@ -75,7 +76,7 @@ export function structuralErrors(error: z.ZodError): readonly [AgqlError, ...Agq
     code: 'STRUCTURAL_INVALID',
     message: `The document is structurally invalid: ${issue.message}`,
     path: jsonPointer(issue.path),
-    alternatives: [],
+    alternatives: structuralAlternatives(issue),
   }));
   const first = mapped[0];
   if (first === undefined) {
@@ -83,10 +84,20 @@ export function structuralErrors(error: z.ZodError): readonly [AgqlError, ...Agq
       code: 'STRUCTURAL_INVALID',
       message: 'The document is structurally invalid.',
       path: '',
-      alternatives: [],
+      alternatives: ['Provide a document accepted by the v0 schema.'],
     }];
   }
   return [first, ...mapped.slice(1)];
+}
+
+function structuralAlternatives(issue: z.ZodIssue): LegalAlternatives {
+  if (issue.code === 'invalid_enum_value' || issue.code === 'invalid_union_discriminator') {
+    const values = issue.options.map((option) => String(option));
+    const first = values[0];
+    if (first !== undefined) return [first, ...values.slice(1)];
+  }
+  if (issue.code === 'invalid_literal') return [String(issue.expected)];
+  return ['Provide a value accepted by the v0 schema at this path.'];
 }
 
 export function errorResult(error: AgqlError): ErrorResult {

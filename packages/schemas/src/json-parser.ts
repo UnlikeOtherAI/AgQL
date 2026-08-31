@@ -1,3 +1,4 @@
+import { isWellFormedUnicode } from './jcs.ts';
 import type { JsonValue } from './jcs.ts';
 
 export class JsonDecodeFailure extends Error {
@@ -45,9 +46,9 @@ export class StrictJsonParser {
   private parseObject(depth: number): JsonValue {
     this.position += 1;
     this.skipWhitespace();
-    const result: Record<string, JsonValue> = {};
+    const entries: [string, JsonValue][] = [];
     const keys = new Set<string>();
-    if (this.consume('}')) return result;
+    if (this.consume('}')) return Object.fromEntries(entries);
     for (;;) {
       if (this.source[this.position] !== '"') this.fail('Expected a JSON object key.');
       const key = this.parseString();
@@ -58,9 +59,9 @@ export class StrictJsonParser {
       this.skipWhitespace();
       this.expect(':');
       this.skipWhitespace();
-      result[key] = this.parseValue(depth);
+      entries.push([key, this.parseValue(depth)]);
       this.skipWhitespace();
-      if (this.consume('}')) return result;
+      if (this.consume('}')) return Object.fromEntries(entries);
       this.expect(',');
       this.skipWhitespace();
     }
@@ -91,7 +92,8 @@ export class StrictJsonParser {
         const encoded = this.source.slice(start, this.position);
         try {
           const parsed: unknown = JSON.parse(encoded);
-          if (typeof parsed === 'string') return parsed;
+          if (typeof parsed === 'string' && isWellFormedUnicode(parsed)) return parsed;
+          if (typeof parsed === 'string') return this.fail('JSON strings must be valid Unicode.');
           return this.fail('Expected a JSON string.');
         } catch {
           return this.fail('The JSON string escape sequence is invalid.');

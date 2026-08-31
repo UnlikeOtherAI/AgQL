@@ -4,9 +4,11 @@ import test from 'node:test';
 import {
   canonicalizeJcs,
   effectivePlanHash,
+  executionFingerprint,
   fingerprintScope,
   sourceQueryHash,
 } from './index.ts';
+import { InstantValueSchema } from './values.ts';
 
 test('JCS matches the RFC 8785 serialization fixture', () => {
   const value = {
@@ -56,4 +58,38 @@ test('identities bind named compositions without semantic-equivalence rewriting'
     scopeFingerprint: scope,
   });
   assert.notEqual(first, second);
+
+  const execution = executionFingerprint({
+    effectivePlanHash: first,
+    bindingVersion: 'binding-1',
+    engineVersion: 'engine-1',
+    adapterVersion: 'adapter-1',
+    anchor: InstantValueSchema.parse('2026-01-01T00:00:00Z'),
+    snapshot: { kind: 'watermark', value: 'watermark-9' },
+    embeddingSpec: {
+      reference: 'body@1',
+      specVersion: '1',
+      model: { id: 'embed', revision: 'provider:immutable-123' },
+      inputTransformId: 'nfc-v1',
+    },
+    qualityProfile: 'certified-high',
+    channelPolicyFingerprint: 'channel-policy-1',
+  });
+  const changedPolicy = executionFingerprint({
+    effectivePlanHash: first,
+    bindingVersion: 'binding-1',
+    engineVersion: 'engine-1',
+    adapterVersion: 'adapter-1',
+    anchor: InstantValueSchema.parse('2026-01-01T00:00:00Z'),
+    snapshot: { kind: 'watermark', value: 'watermark-9' },
+    embeddingSpec: {
+      reference: 'body@1',
+      specVersion: '1',
+      model: { id: 'embed', revision: 'provider:immutable-123' },
+      inputTransformId: 'nfc-v1',
+    },
+    qualityProfile: 'certified-high',
+    channelPolicyFingerprint: 'channel-policy-2',
+  });
+  assert.notEqual(execution, changedPolicy);
 });

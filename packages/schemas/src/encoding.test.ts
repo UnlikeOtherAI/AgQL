@@ -56,6 +56,16 @@ test('fenced YAML, duplicate JSON keys, and deployment-lowered caps are determin
   const oversized = decodeJson('{"value":"long"}', { maximumBytes: 4 });
   assert.equal(oversized.ok, false);
   if (!oversized.ok) assert.equal(oversized.errors[0].code, 'ENCODING_SIZE_LIMIT');
+  const invalidUnicode = decodeJson('"\\ud800"');
+  assert.equal(invalidUnicode.ok, false);
+  if (!invalidUnicode.ok) assert.equal(invalidUnicode.errors[0].code, 'ENCODING_SYNTAX');
+  const prototypeKey = decodeJson('{"__proto__":{"polluted":true}}');
+  assert.equal(prototypeKey.ok, true);
+  if (prototypeKey.ok && prototypeKey.value !== null
+    && typeof prototypeKey.value === 'object') {
+    assert.equal(Object.hasOwn(prototypeKey.value, '__proto__'), true);
+    assert.equal(Object.hasOwn(Object.prototype, 'polluted'), false);
+  }
 });
 
 test('validated JSON and YAML edges produce one canonical source query identity', () => {
