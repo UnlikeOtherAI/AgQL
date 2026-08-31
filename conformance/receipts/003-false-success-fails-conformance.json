@@ -1,0 +1,19 @@
+{
+  "format": "agql-receipt-fixture/0.1",
+  "id": "receipts.false-success-fails-conformance",
+  "rfc": ["§7", "§11", "§12"],
+  "rule": "A success result while any required representation is not visible is a conformance failure even if the returned rows happen to look plausible.",
+  "setup": {
+    "dataset": "documents",
+    "record": {"id": "doc-false-success", "body": "canonical row visible, embedding absent"},
+    "receipt": "wr_fixture_003",
+    "visibilityAtAttempt": {"record": {"state": "ready", "token": "opaque:V1ItMDAzLXJlY29yZA"}, "embedding:body@2": {"state": "accepted"}},
+    "simulatedImplementationOutcome": {"kind": "success", "rows": []}
+  },
+  "query": {"version": "0", "mode": "retrieve", "from": "documents", "search": {"kind": "semantic", "using": "body@2", "text": "absent", "accuracy": "approximate", "quality": "baseline-unset-v0"}, "afterWrite": {"receipt": "wr_fixture_003", "require": ["record", "embedding:body@2"], "timeoutMs": 1}, "take": 10},
+  "expected": {
+    "runnerVerdict": "fail-build",
+    "reason": "The implementation returned success while embedding:body@2 was not visible to the query.",
+    "assertions": ["An empty successful row set is still false success.", "The runner must not accept eventual consistency observed after the response as retroactive proof."]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "format": "agql-receipt-fixture/0.1",
+  "id": "receipts.opaque-visibility-tokens",
+  "rfc": ["§7", "§8", "§12"],
+  "rule": "Receipt visibility tokens are opaque and never expose backend-native identifiers or topology.",
+  "setup": {"receipt": "wr_fixture_008", "representation": "embedding:body@2"},
+  "cases": [
+    {"name": "opaque-random-looking", "token": "opaque:T1BRUV9UT0tFTl9GSVhUVVJFX1NQRUM", "expected": "acceptable-if-issuer-treats-as-opaque"},
+    {"name": "sql-lsn", "token": "postgres:public.documents:lsn=0/16B6C50", "expected": "refuse-or-redact"},
+    {"name": "vector-index", "token": "index=documents_body_v2;shard=7;offset=991", "expected": "refuse-or-redact"},
+    {"name": "document-engine", "token": "collection/documents/_seq_no/883/_primary_term/4", "expected": "refuse-or-redact"},
+    {"name": "backend-uri", "token": "backend://node-3/internal/index/42", "expected": "refuse-or-redact"}
+  ],
+  "expected": {
+    "assertions": ["No rejected token appears in a write receipt, query result, provenance envelope, model channel, or principal channel.", "The engine treats an acceptable token as an uninterpreted value scoped to the issuing component."],
+    "gap": "RFC §7 mandates opacity but does not define a token grammar, entropy/length requirements, encryption, allowed prefix, scoping, rotation, or an objective test for whether an encoded token exposes a native identifier. The first case is not a mandated token format."
+  }
+}
