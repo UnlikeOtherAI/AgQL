@@ -349,7 +349,7 @@ async function provisionFixture(fixture: ExactFixture, databaseUrl: string): Pro
     const bindings = datasetBindings(catalog);
     for (const binding of bindings) {
       const provisionerConfig: PostgresProvisionerConfig = {
-        pool: admin as PostgresProvisionerConfig['pool'],
+        pool: admin,
         namespace,
         provisionerRole,
         queryRole,
@@ -363,8 +363,8 @@ async function provisionFixture(fixture: ExactFixture, databaseUrl: string): Pro
     await seed(writerPool, namespace, catalog, bindings,
       arrayMember(fixture.value, 'seed', fixture.sourcePath));
     const adapterConfig: PostgresAdapterConfig = {
-      queryPool: queryPool as PostgresAdapterConfig['queryPool'],
-      writerPool: writerPool as PostgresAdapterConfig['writerPool'],
+      queryPool,
+      writerPool,
       namespace,
       queryRole,
       writerRole,
