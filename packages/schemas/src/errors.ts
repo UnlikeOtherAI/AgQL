@@ -84,12 +84,7 @@ export function jsonPointer(path: readonly (string | number)[]): string {
 }
 
 export function structuralErrors(error: z.ZodError): readonly [AgqlError, ...AgqlError[]] {
-  const mapped = error.issues.map((issue): AgqlError => ({
-    code: 'STRUCTURAL_INVALID',
-    message: `The document is structurally invalid: ${issue.message}`,
-    path: jsonPointer(issue.path),
-    alternatives: structuralAlternatives(issue),
-  }));
+  const mapped = error.issues.map((issue): AgqlError => structuralErrorForIssue(issue));
   const first = mapped[0];
   if (first === undefined) {
     return [{
@@ -100,6 +95,39 @@ export function structuralErrors(error: z.ZodError): readonly [AgqlError, ...Agq
     }];
   }
   return [first, ...mapped.slice(1)];
+}
+
+function structuralErrorForIssue(issue: z.ZodIssue): AgqlError {
+  const path = jsonPointer(issue.path);
+  if (path === '/take' && (issue.code === 'too_small' || issue.code === 'too_big')) {
+    return {
+      code: 'LIMIT_OUT_OF_RANGE',
+      message: 'The bounded integer is outside the permitted range.',
+      path,
+      alternatives: ['Use an integer from 1 through 1000.'],
+    };
+  }
+  const typePaths: Readonly<Record<string, string>> = {
+    '/version': 'Use the JSON string "0".',
+    '/select': 'Use a JSON array of field ids.',
+    '/order': 'Use a JSON array of order items.',
+  };
+  const alternative = typePaths[path];
+  if (alternative !== undefined
+    && (issue.code === 'invalid_type' || issue.code === 'invalid_literal')) {
+    return {
+      code: 'SCHEMA_TYPE_MISMATCH',
+      message: 'The value has the wrong JSON type.',
+      path,
+      alternatives: [alternative],
+    };
+  }
+  return {
+    code: 'STRUCTURAL_INVALID',
+    message: `The document is structurally invalid: ${issue.message}`,
+    path,
+    alternatives: structuralAlternatives(issue),
+  };
 }
 
 function structuralAlternatives(issue: z.ZodIssue): LegalAlternatives {

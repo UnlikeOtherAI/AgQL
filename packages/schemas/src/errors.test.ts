@@ -12,14 +12,14 @@ test('structural validation reports all issues in deterministic document order',
   const errors = structuralErrors(result.error);
   assert.ok(errors.length > 1);
   assert.equal(errors[0].path, '/version');
-  assert.equal(errors[0].code, 'STRUCTURAL_INVALID');
-  assert.deepEqual(errors[0].alternatives, ['0']);
+  assert.equal(errors[0].code, 'SCHEMA_TYPE_MISMATCH');
+  assert.deepEqual(errors[0].alternatives, ['Use the JSON string "0".']);
 });
 
 test('unavailable references cannot carry hidden-name alternatives', () => {
   assert.deepEqual(referenceNotAvailable('/select/0'), {
     code: 'REFERENCE_NOT_AVAILABLE',
-    message: 'The referenced item is not available in the effective catalog.',
+    message: 'The referenced catalog item is not available in this scope.',
     path: '/select/0',
     alternatives: [],
   });

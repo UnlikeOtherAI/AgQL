@@ -23,7 +23,7 @@ import { validateDeploymentLimits } from './limits.ts';
 import { buildAggregatePlan } from './plan-aggregate.ts';
 import { buildRecordsPlan } from './plan-records.ts';
 import { buildRetrievePlan } from './plan-retrieve.ts';
-import { boundField } from './policy.ts';
+import { authorizedField, boundField } from './policy.ts';
 import { compileEffectiveFilter } from './predicates.ts';
 import { expandScope } from './scope.ts';
 import type {
@@ -160,6 +160,15 @@ function retrievalAccuracy(query: QueryDocument): 'exact' | 'approximate' | unde
   return query.search.kind === 'hybrid' ? 'approximate' : query.search.accuracy;
 }
 
+function validateRecordProjectionOrder(context: CompileContext): EngineResult<true> {
+  if (context.query.mode !== 'records') return { ok: true, value: true };
+  for (const [index, field] of context.query.select.entries()) {
+    const authorized = authorizedField(context, field, 'select', `/select/${index}`);
+    if (!authorized.ok) return authorized;
+  }
+  return { ok: true, value: true };
+}
+
 export function compileQuery(input: CompileQueryInput): EngineResult<CompileOutput> {
   const validated = validateAndCanonicalizeQuery(input.query);
   if (!validated.ok) return { ok: false, errors: validated.errors };
@@ -226,6 +235,8 @@ export function compileQuery(input: CompileQueryInput): EngineResult<CompileOutp
   if (!expandedScope.ok) return expandedScope;
   const afterWrite = validateAfterWrite(context, expandedScope.value);
   if (!afterWrite.ok) return afterWrite;
+  const projection = validateRecordProjectionOrder(context);
+  if (!projection.ok) return projection;
   const filter = compileEffectiveFilter(context);
   if (!filter.ok) return filter;
   let planOutput: {

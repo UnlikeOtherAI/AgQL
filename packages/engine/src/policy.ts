@@ -54,7 +54,9 @@ export function authorizedField(
       const candidate = context.dataset.fieldPolicies[id];
       return candidate !== undefined
         && context.binding.fields[id] !== undefined
-        && accessRuleAllows(operationRule(candidate, operation)[context.input.channel], context.scope);
+        && accessRuleAllows(
+          operationRule(candidate, operation)[context.input.channel], context.scope,
+        );
     })
     .map(([id]) => id)
     .sort();
