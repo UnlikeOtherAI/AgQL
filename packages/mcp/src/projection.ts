@@ -50,14 +50,15 @@ function copyErrors(
         code: error.code,
         message: error.message,
         path: error.path,
-        alternatives: [],
+        alternatives: [...error.alternatives],
       };
     }
+    const [first, ...rest] = error.alternatives;
     return {
       code: error.code,
       message: error.message,
       path: error.path,
-      alternatives: [...error.alternatives],
+      alternatives: [first, ...rest],
     };
   });
   const first = copied[0];

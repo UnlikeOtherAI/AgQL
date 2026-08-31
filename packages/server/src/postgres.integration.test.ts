@@ -235,6 +235,16 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       assert.equal(httpPayload.status, 'ok');
       assert.deepEqual(httpPayload.preview, expectedProjects);
 
+      const explained = await fetch(`${base}/v0/query/explain`, {
+        method: 'POST',
+        headers: headers(key),
+        body: JSON.stringify({ source: 'default', query: projectQuery() }),
+      });
+      assert.equal(explained.status, 200);
+      const explainedPayload = responseObject(await explained.json());
+      // explain accepts a plan; only run returns a result (ExplainPayload vs RunPayload).
+      assert.equal(explainedPayload.status, 'accepted');
+
       const mcpHeaders = headers(key);
       mcpHeaders.set('mcp-protocol-version', MCP_PROTOCOL_VERSION);
       mcpHeaders.set('mcp-method', 'tools/call');
@@ -263,6 +273,31 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       assert.equal(mcpPayload.status, 'ok');
       assert.deepEqual(mcpPayload.preview, expectedProjects);
 
+      const mcpExplainHeaders = new Headers(mcpHeaders);
+      mcpExplainHeaders.set('mcp-name', 'explain_query');
+      const mcpExplain = await fetch(`${base}/mcp`, {
+        method: 'POST',
+        headers: mcpExplainHeaders,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: {
+            name: 'explain_query',
+            arguments: { source: 'default', query: projectQuery() },
+            _meta: {
+              'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+              'io.modelcontextprotocol/clientCapabilities': {},
+            },
+          },
+        }),
+      });
+      assert.equal(mcpExplain.status, 200);
+      const mcpExplainPayload = responseObject(
+        responseObject(responseObject(await mcpExplain.json()).result).structuredContent,
+      );
+      assert.equal(mcpExplainPayload.status, 'accepted');
+
       const unavailable = await fetch(`${base}/v0/query/run`, {
         method: 'POST',
         headers: headers(key),
@@ -277,7 +312,65 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       }
       const error = responseObject(errors[0]);
       assert.equal(error.code, 'REFERENCE_NOT_AVAILABLE');
-      assert.deepEqual(error.alternatives, []);
+      assert.deepEqual(error.alternatives, ['projects']);
+
+      const unavailableExplain = await fetch(`${base}/v0/query/explain`, {
+        method: 'POST',
+        headers: headers(key),
+        body: JSON.stringify({ source: 'default', query: taskQuery() }),
+      });
+      assert.equal(unavailableExplain.status, 200);
+      const unavailableExplainPayload = responseObject(await unavailableExplain.json());
+      assert.equal(unavailableExplainPayload.status, 'rejected');
+      assert.deepEqual(unavailableExplainPayload.errors, errors);
+
+      const unavailableMcp = await fetch(`${base}/mcp`, {
+        method: 'POST',
+        headers: mcpHeaders,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'run_query',
+            arguments: { source: 'default', query: taskQuery() },
+            _meta: {
+              'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+              'io.modelcontextprotocol/clientCapabilities': {},
+            },
+          },
+        }),
+      });
+      assert.equal(unavailableMcp.status, 200);
+      const unavailableMcpPayload = responseObject(
+        responseObject(responseObject(await unavailableMcp.json()).result).structuredContent,
+      );
+      assert.equal(unavailableMcpPayload.status, 'rejected');
+      assert.deepEqual(unavailableMcpPayload.errors, errors);
+
+      const unavailableMcpExplain = await fetch(`${base}/mcp`, {
+        method: 'POST',
+        headers: mcpExplainHeaders,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'tools/call',
+          params: {
+            name: 'explain_query',
+            arguments: { source: 'default', query: taskQuery() },
+            _meta: {
+              'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+              'io.modelcontextprotocol/clientCapabilities': {},
+            },
+          },
+        }),
+      });
+      assert.equal(unavailableMcpExplain.status, 200);
+      const unavailableMcpExplainPayload = responseObject(
+        responseObject(responseObject(await unavailableMcpExplain.json()).result).structuredContent,
+      );
+      assert.equal(unavailableMcpExplainPayload.status, 'rejected');
+      assert.deepEqual(unavailableMcpExplainPayload.errors, errors);
     } finally {
       if (application !== undefined) await application.close();
       else await deployment.close();

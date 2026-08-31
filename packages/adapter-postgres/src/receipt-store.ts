@@ -161,9 +161,7 @@ function decodeError(value: unknown): AgqlError | undefined {
   const code = ERROR_CODES.find((candidate) => candidate === value.code);
   if (code === undefined) return undefined;
   if (code === 'REFERENCE_NOT_AVAILABLE') {
-    return value.alternatives.length === 0
-      ? { code, message: value.message, path: value.path, alternatives: [] }
-      : undefined;
+    return { code, message: value.message, path: value.path, alternatives: value.alternatives };
   }
   const first = value.alternatives[0];
   return first === undefined

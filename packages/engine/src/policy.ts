@@ -2,7 +2,7 @@ import {
   accessRuleAllows,
   deriveEmbeddingSearchPolicy,
 } from '@agql/catalog';
-import type { FieldPolicy } from '@agql/schemas';
+import type { CatalogDocument, FieldPolicy } from '@agql/schemas';
 import type {
   ResolvedEmbeddingBinding,
   ResolvedFieldBinding,
@@ -10,7 +10,7 @@ import type {
 
 import type { CompileContext } from './compile-context.ts';
 import { fail, repairableError, unavailableReference } from './errors.ts';
-import type { EngineResult } from './types.ts';
+import type { EngineBinding, EngineResult } from './types.ts';
 import { resolveFieldBinding } from './values.ts';
 
 export type FieldOperation =
@@ -20,6 +20,36 @@ export type FieldOperation =
   | 'order'
   | 'lexicalSearch'
   | { readonly aggregate: keyof FieldPolicy['aggregate'] };
+
+/**
+ * Dataset capability tags are a policy boundary, not a transport concern.
+ * The same scoped vocabulary repairs both hidden and nonexistent references.
+ */
+export function availableDatasetReferences(
+  catalog: CatalogDocument,
+  binding: EngineBinding,
+  scope: CompileContext['scope'],
+): readonly string[] {
+  return Object.entries(catalog.datasets)
+    .filter(([id, dataset]) => binding.datasets[id] !== undefined
+      && dataset.capabilityTags.every((tag) => scope.capabilities.includes(tag)))
+    .map(([id]) => id)
+    .sort();
+}
+
+export function authorizedDataset(
+  context: Pick<CompileContext, 'dataset' | 'scope' | 'input'>,
+): EngineResult<true> {
+  const allowed = context.dataset.capabilityTags.every((tag) =>
+    context.scope.capabilities.includes(tag));
+  return allowed
+    ? { ok: true, value: true }
+    : fail(unavailableReference('/from', availableDatasetReferences(
+      context.input.catalog,
+      context.input.binding,
+      context.scope,
+    )));
+}
 
 function operationRule(policy: FieldPolicy, operation: FieldOperation) {
   return typeof operation === 'string'
