@@ -11,12 +11,13 @@ import type { EngineQueryAdapter, EngineError } from '@agql/engine';
 import { executeQuery } from '@agql/engine';
 import type { AdapterExecutionResult, AdapterOutcome, TypedValue } from '@agql/contracts';
 import {
+  QUERY_LIMITS,
   SafeIntegerSchema,
   canonicalizeJcs,
 } from '@agql/schemas';
 import type { CatalogDocument, DatasetDocument, JsonValue } from '@agql/schemas';
 
-import { mapExactRuntimeInput } from './exact-catalog.ts';
+import { mapExactRuntimeInput, mapExactStorageCatalog } from './exact-catalog.ts';
 import type {
   ExactAdapterDriver,
   ExactAdapterRun,
@@ -304,14 +305,14 @@ async function executeOnce(
       anchor: runtime.anchor,
       channel: 'principal',
       limits: {
-        booleanNesting: SafeIntegerSchema.parse(64),
-        inList: SafeIntegerSchema.parse(10_000),
-        predicateNodes: SafeIntegerSchema.parse(10_000),
-        select: SafeIntegerSchema.parse(1_000),
+        booleanNesting: SafeIntegerSchema.parse(QUERY_LIMITS.booleanNesting),
+        inList: SafeIntegerSchema.parse(QUERY_LIMITS.inList),
+        predicateNodes: SafeIntegerSchema.parse(QUERY_LIMITS.predicateNodes),
+        select: SafeIntegerSchema.parse(QUERY_LIMITS.select),
         take: {
-          aggregate: SafeIntegerSchema.parse(1_000),
-          records: SafeIntegerSchema.parse(1_000),
-          retrieve: SafeIntegerSchema.parse(1_000),
+          aggregate: SafeIntegerSchema.parse(QUERY_LIMITS.take.aggregate),
+          records: SafeIntegerSchema.parse(QUERY_LIMITS.take.records),
+          retrieve: SafeIntegerSchema.parse(QUERY_LIMITS.take.retrieve),
         },
       },
       calendar: { timezone: 'UTC', weekStartsOn: 'monday' },
@@ -319,8 +320,8 @@ async function executeOnce(
       adapter: counted.descriptor,
       costGate: {
         estimate: {
-          estimatedRows: SafeIntegerSchema.parse(1_000),
-          estimatedCandidateRecords: SafeIntegerSchema.parse(1_000),
+          estimatedRows: runtime.scope.budgets.maximumExactScanRecords,
+          estimatedCandidateRecords: runtime.scope.budgets.maximumCandidateRecords,
           estimatedIntermediateBytes: SafeIntegerSchema.parse(1_000_000),
           selectiveFilterFields: [],
         },
@@ -405,11 +406,11 @@ export function createSqliteExactDriver(): ExactAdapterDriver {
       const directory = await mkdtemp(path.join(tmpdir(), 'agql-exact-'));
       const databasePath = path.join(directory, 'fixture.sqlite');
       try {
-        const runtime = mapExactRuntimeInput(fixture, ADAPTER_ID, ADAPTER_VERSION);
+        const storageCatalog = mapExactStorageCatalog(fixture);
         const database = new DatabaseSync(databasePath);
         try {
-          createSchema(database, runtime.catalog);
-          insertSeed(database, runtime.catalog,
+          createSchema(database, storageCatalog);
+          insertSeed(database, storageCatalog,
             arrayMember(fixture.value, 'seed', fixture.sourcePath));
         } finally {
           database.close();

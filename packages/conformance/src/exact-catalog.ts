@@ -254,18 +254,19 @@ function mapEmbeddingSpec(
   }];
 }
 
-function fixtureCatalog(fixture: ExactFixture): CatalogDocument {
+function fixtureCatalog(fixture: ExactFixture, applyPolicy: boolean): CatalogDocument {
   const source = objectMember(fixture.value, 'catalog', fixture.sourcePath);
-  const policy = optionalObject(fixture.value, 'policy', fixture.sourcePath);
+  const fixturePolicy = optionalObject(fixture.value, 'policy', fixture.sourcePath);
+  const policy = applyPolicy ? fixturePolicy : undefined;
   const datasets = Object.fromEntries(arrayMember(source, 'datasets', '/catalog')
     .map((item, index) => mapDataset(item, policy, `/catalog/datasets/${index}`))
     .filter((item): item is readonly [string, DatasetDocument] => item !== undefined));
   const specs = source.embeddingSpecs === undefined
     ? []
     : jsonArray(source.embeddingSpecs, '/catalog/embeddingSpecs');
-  const policyVersion = policy === undefined
+  const policyVersion = fixturePolicy === undefined
     ? `${stringMember(source, 'version', '/catalog')}:policy`
-    : stringMember(policy, 'version', '/policy');
+    : stringMember(fixturePolicy, 'version', '/policy');
   return CatalogDocumentSchema.parse({
     schemaVersion: '0',
     catalogVersion: stringMember(source, 'version', '/catalog'),
@@ -393,7 +394,7 @@ export function mapExactRuntimeInput(
   adapterId: string,
   adapterVersion: string,
 ): ExactRuntimeInput {
-  const catalog = fixtureCatalog(fixture);
+  const catalog = fixtureCatalog(fixture, true);
   const vector = queryVector(fixture);
   return {
     catalog,
@@ -408,4 +409,9 @@ export function mapExactRuntimeInput(
       adapterVersion,
     ),
   };
+}
+
+/** Storage retains policy-hidden datasets; only the effective engine catalog removes them. */
+export function mapExactStorageCatalog(fixture: ExactFixture): CatalogDocument {
+  return fixtureCatalog(fixture, false);
 }

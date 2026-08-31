@@ -29,4 +29,14 @@ test('exact suite accounts for every fixture and preserves explicit extension bl
   assert.equal(receiptContract?.outcome.status, 'blocked');
   if (receiptContract?.outcome.status !== 'blocked') assert.fail('Expected CAS blocker.');
   assert.equal(receiptContract.outcome.capability, 'per-record-cas-outcomes');
+  for (const id of [
+    'exact.retrieve.membership-and-order',
+    'exact.retrieve.filter-before-rank',
+  ]) {
+    const fixture = execution.report.fixtures.find((item) => item.id === id);
+    assert.equal(fixture?.outcome.status, 'pass');
+    const observation = execution.adapterRuns[id]?.observations.query;
+    assert.equal(observation?.kind, 'success');
+    if (observation?.kind === 'success') assert.equal(observation.repeatedSemanticEqual, true);
+  }
 });

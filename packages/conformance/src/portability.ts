@@ -7,6 +7,7 @@ import type {
   ExactAdapterRun,
   ExactQueryObservation,
 } from './exact-driver.ts';
+import { loadExactFixtures } from './exact-fixtures.ts';
 import { runExactSuite } from './exact.ts';
 import type { ExactSuiteExecution } from './exact.ts';
 import {
@@ -81,11 +82,10 @@ function diagnostic(
 
 function firstDecline(run: ExactAdapterRun | undefined): string | undefined {
   if (run === undefined) return undefined;
-  return Object.values(run.observations)
-    .find((observation) => observation.kind === 'declined')?.kind === 'declined'
-    ? Object.values(run.observations)
-        .find((observation) => observation.kind === 'declined')?.reason
-    : undefined;
+  for (const observation of Object.values(run.observations)) {
+    if (observation.kind === 'declined') return observation.reason;
+  }
+  return undefined;
 }
 
 function blockedCapability(fixture: FixtureResult): string | undefined {
@@ -98,6 +98,7 @@ function compareFixture(
   right: ExactSuiteExecution,
   leftDriver: ExactAdapterDriver,
   rightDriver: ExactAdapterDriver,
+  requiredProfile: string,
   skips: PortabilitySkip[],
   comparisons: PortabilityComparison[],
 ): FixtureResult {
@@ -128,13 +129,13 @@ function compareFixture(
     if (leftDecline !== undefined) skips.push({
       fixtureId,
       adapterId: leftDriver.id,
-      profile: fixtureId,
+      profile: requiredProfile,
       reason: leftDecline,
     });
     if (rightDecline !== undefined) skips.push({
       fixtureId,
       adapterId: rightDriver.id,
-      profile: fixtureId,
+      profile: requiredProfile,
       reason: rightDecline,
     });
     const reason = [leftDecline, rightDecline].filter((value) => value !== undefined).join('; ');
@@ -205,17 +206,29 @@ export async function runPortabilitySuite(
     runExactSuite(corpusRoot, leftDriver),
     runExactSuite(corpusRoot, rightDriver),
   ]);
+  const fixtures = await loadExactFixtures(corpusRoot);
+  const profiles = new Map(fixtures.map((fixture) => [
+    fixture.id,
+    fixture.requiresProfile,
+  ]));
   const skips: PortabilitySkip[] = [];
   const comparisons: PortabilityComparison[] = [];
-  const results = left.report.fixtures.map((fixture) => compareFixture(
-    fixture.id,
-    left,
-    right,
-    leftDriver,
-    rightDriver,
-    skips,
-    comparisons,
-  ));
+  const results = left.report.fixtures.map((fixture) => {
+    const requiredProfile = profiles.get(fixture.id);
+    if (requiredProfile === undefined) {
+      throw new TypeError(`Exact corpus omitted profile for ${fixture.id}.`);
+    }
+    return compareFixture(
+      fixture.id,
+      left,
+      right,
+      leftDriver,
+      rightDriver,
+      requiredProfile,
+      skips,
+      comparisons,
+    );
+  });
   return {
     report: createSuiteReport(`portability:${leftDriver.id}:${rightDriver.id}`, results),
     comparisons,

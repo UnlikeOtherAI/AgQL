@@ -45,21 +45,9 @@ interface ExactBlocker {
 }
 
 const BLOCKERS: Readonly<Record<string, ExactBlocker>> = {
-  'exact.records.pagination-reproducibility': {
-    capability: 'cursor-pagination-harness',
-    reason: 'The current engine API has no cursor-page execution surface.',
-  },
   'exact.records.decimal-precision-scale-boundaries': {
     capability: 'per-record-cas-outcomes',
     reason: 'Per-record ingest outcomes are owned by the concurrent contract task.',
-  },
-  'exact.aggregate.money-cross-currency-sum-refusal': {
-    capability: 'multi-currency-money-field',
-    reason: 'The current catalog contract requires one fixed currency per money field.',
-  },
-  'exact.aggregate.money-cross-currency-avg-refusal': {
-    capability: 'multi-currency-money-field',
-    reason: 'The current catalog contract requires one fixed currency per money field.',
   },
   'exact.aggregate.calendar-day-dst-spring': {
     capability: 'calendar-period-adapter-values',
@@ -72,10 +60,6 @@ const BLOCKERS: Readonly<Record<string, ExactBlocker>> = {
   'exact.aggregate.calendar-week-start': {
     capability: 'calendar-period-adapter-values',
     reason: 'Calendar-period adapter values are owned by the concurrent contract task.',
-  },
-  'exact.records.relative-in-current-explicit-anchor': {
-    capability: 'non-utc-calendar-policy',
-    reason: 'The current engine calendar boundary accepts UTC only.',
   },
 };
 
