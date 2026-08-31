@@ -23,8 +23,9 @@ export function resolvedValueType(field: FieldDocument): ResolvedValueType {
       return { kind: 'money', currency: field.currency };
     case 'text':
       return { kind: 'text', collation: field.collation };
-    case 'enum':
+    case 'enum': {
       return { kind: 'enum', codes: field.values.map(({ code }) => code) };
+    }
     case 'instant':
       return { kind: 'instant', precision: field.precision };
     default:
@@ -99,10 +100,20 @@ export function typeLiteral(
         ? { ok: true, value: { kind: 'text', value: parsed.data } }
         : invalidLiteral(field, path);
     }
-    case 'enum':
-      return typeof literal === 'string' && field.type.codes.includes(literal)
-        ? { ok: true, value: { kind: 'enum', value: literal } }
-        : invalidLiteral(field, path);
+    case 'enum': {
+      if (typeof literal === 'string' && field.type.codes.includes(literal)) {
+        return { ok: true, value: { kind: 'enum', value: literal } };
+      }
+      const alternatives = [...field.type.codes].sort();
+      const first = alternatives[0];
+      if (first === undefined) throw new TypeError('Enum field lacks declared codes.');
+      return fail({
+        code: 'ENUM_VALUE_INVALID',
+        message: 'The value is not a declared enum code.',
+        path,
+        alternatives: [first, ...alternatives.slice(1)],
+      });
+    }
     case 'date': {
       const parsed = DateValueSchema.safeParse(literal);
       return parsed.success

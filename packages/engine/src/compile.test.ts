@@ -115,7 +115,7 @@ test('enum labels are not accepted as enum values', () => {
       value: 'Tenant A',
     },
   }));
-  assert.equal(firstError(result)?.code, 'SEMANTIC_INVALID');
+  assert.equal(firstError(result)?.code, 'ENUM_VALUE_INVALID');
   assert.equal(firstError(result)?.path, '/where/value');
 });
 
