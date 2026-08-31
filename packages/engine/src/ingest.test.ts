@@ -125,7 +125,7 @@ test('whole-record replace rejects missing fields and unsupported compare-and-sw
   assert.equal(firstError(noCas)?.code, 'UNSUPPORTED_PROFILE');
 });
 
-test('writes outside scope and unverifiable partitioned deletes refuse before adapters', () => {
+test('partitioned deletes carry adapter predicates while out-of-scope writes refuse', () => {
   const outside = compileIngest(input({
     ...insert,
     records: [{ id: 'doc-2', value: { ...completeValue, 'docs.tenant': 'b' } }],
@@ -139,7 +139,12 @@ test('writes outside scope and unverifiable partitioned deletes refuse before ad
     embeddingPolicy: 'catalog',
     records: [{ id: 'doc-1', ifVersion: 2 }],
   }));
-  assert.equal(firstError(deletion)?.code, 'SCOPE_UNENFORCEABLE');
+  const compiledDelete = success(deletion);
+  assert.equal(compiledDelete.plan.mode, 'delete');
+  assert.equal(compiledDelete.plan.scope.visibility, 'predicate');
+  if (compiledDelete.plan.scope.visibility === 'predicate') {
+    assert.equal(compiledDelete.plan.scope.enforcement, 'mandatoryPushdown');
+  }
 });
 
 test('delete compiles when its unpartitioned scope is enforceable and merge is rejected', () => {
@@ -196,22 +201,27 @@ test('ingest execution returns one validated record outcome plus the batch recei
         return Promise.resolve({
           kind: 'success',
           value: {
-            receipt: 'wr-insert' as WriteReceiptId,
-            records: [{
-              id: 'doc-1',
-              version: SafeIntegerSchema.parse(1),
-              visibility: {
-                record: { state: 'ready', token },
-                lexical: { state: 'accepted' },
-                'embedding:body@2': { state: 'accepted' },
-              },
+            outcomes: [{
+              id: 'doc-1', status: 'accepted', version: SafeIntegerSchema.parse(1), error: null,
             }],
+            writeReceipt: {
+              receipt: 'wr-insert' as WriteReceiptId,
+              records: [{
+                id: 'doc-1',
+                version: SafeIntegerSchema.parse(1),
+                visibility: {
+                  record: { state: 'ready', token },
+                  lexical: { state: 'accepted' },
+                  'embedding:body@2': { state: 'pending' },
+                },
+              }],
+            },
           },
         });
       },
     },
   };
-  const receipt = success(await executeIngest(input(insert), adapter));
-  assert.equal(receipt.receipt, 'wr-insert');
-  assert.equal(receipt.records[0]?.visibility.record?.state, 'ready');
+  const result = success(await executeIngest(input(insert), adapter));
+  assert.equal(result.writeReceipt.receipt, 'wr-insert');
+  assert.equal(result.writeReceipt.records[0]?.visibility.record?.state, 'ready');
 });

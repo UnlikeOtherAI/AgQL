@@ -1,5 +1,4 @@
 import type {
-  CalendarPeriod,
   CanonicalDecimal,
   CurrencyCode,
   DateValue,
@@ -16,6 +15,17 @@ import type { WriteReceiptId } from './receipt.ts';
 
 declare const modelReleasedValueBrand: unique symbol;
 
+export type CalendarGrain = 'day' | 'fiscalDay' | 'week' | 'month';
+
+/** RFC §4.1 result-only half-open civil-time bucket. */
+export interface CalendarPeriodValue {
+  readonly start: InstantValue;
+  readonly endExclusive: InstantValue;
+  readonly timezone: string;
+  readonly grain: CalendarGrain;
+  readonly label: string;
+}
+
 export type ResultValue =
   | null
   | boolean
@@ -25,12 +35,15 @@ export type ResultValue =
   | { readonly amount: CanonicalDecimal; readonly currency: CurrencyCode }
   | DateValue
   | InstantValue
-  | CalendarPeriod;
+  | CalendarPeriodValue;
 
-/** Only the release-policy stage may construct this branded model-channel value. */
-export type ModelReleasedValue = ResultValue & {
+/**
+ * Only the release-policy stage may construct a non-null model-channel value. Null carries
+ * no principal data, so it remains the one directly inhabitable released value.
+ */
+export type ModelReleasedValue = null | (Exclude<ResultValue, null> & {
   readonly [modelReleasedValueBrand]: true;
-};
+});
 
 export type ModelPreviewRow = Readonly<Record<string, ModelReleasedValue>>;
 
@@ -58,6 +71,7 @@ export type ResultSchemaField =
   })
   | (ResultSchemaFieldBase & {
     readonly kind: 'calendarPeriod';
+    readonly grain: CalendarGrain;
     readonly timezone: string;
   });
 

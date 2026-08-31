@@ -6,7 +6,9 @@ import { fail, repairableError } from './errors.ts';
 import type { EngineResult } from './types.ts';
 import { typeLiteral } from './values.ts';
 
-export function expandScope(context: CompileContext): EngineResult<ExpandedScope> {
+type ScopeExpansionContext = Pick<CompileContext, 'dataset' | 'binding' | 'scope'>;
+
+export function expandScope(context: ScopeExpansionContext): EngineResult<ExpandedScope> {
   if (context.scope.partitions.kind === 'nothing') {
     return { ok: true, value: { visibility: 'nothing' } };
   }

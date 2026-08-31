@@ -28,7 +28,7 @@ function operationRule(policy: FieldPolicy, operation: FieldOperation) {
 }
 
 export function boundField(
-  context: CompileContext,
+  context: Pick<CompileContext, 'dataset' | 'binding'>,
   fieldId: string,
   path: string,
 ): EngineResult<ResolvedFieldBinding> {

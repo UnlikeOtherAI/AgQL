@@ -233,36 +233,50 @@ export function buildAggregatePlan(
       `/dimensions/${index}/field`,
       ['Use a field in the effective catalog.'],
     ));
-    const shape: ResultSchemaField = dimension.kind === 'timeBucket'
-      ? { id: dimension.id, kind: 'calendarPeriod', timezone: dimension.timezone, nullable: true }
-      : fieldResultShape(dimension.id, document);
-    if (dimension.kind === 'timeBucket'
-      && field.value.type.kind !== 'instant'
-      && field.value.type.kind !== 'date') {
-      return fail(semanticError(
-        'A time bucket requires a date or instant field.',
-        `/dimensions/${index}/field`,
-        ['Use a date or instant field.'],
-      ));
-    }
-    if (dimension.kind === 'timeBucket'
-      && dimension.timezone !== context.input.calendar.timezone) {
-      return fail(semanticError(
-        'The time-bucket timezone is not available in this calendar policy.',
-        `/dimensions/${index}/timezone`,
-        [context.input.calendar.timezone],
-      ));
-    }
-    dimensions.push(dimension.kind === 'field'
-      ? { kind: 'field', output, field: field.value }
-      : {
+    let shape: ResultSchemaField;
+    if (dimension.kind === 'timeBucket') {
+      if (dimension.grain === 'quarter' || dimension.grain === 'year') {
+        return fail(semanticError(
+          'The calendar grain is not part of the v0 vocabulary.',
+          `/dimensions/${index}/grain`,
+          ['day', 'fiscalDay', 'week', 'month'],
+        ));
+      }
+      shape = {
+        id: dimension.id,
+        kind: 'calendarPeriod',
+        grain: dimension.grain,
+        timezone: dimension.timezone,
+        nullable: true,
+      };
+      if (field.value.type.kind !== 'instant' && field.value.type.kind !== 'date') {
+        return fail(semanticError(
+          'A time bucket requires a date or instant field.',
+          `/dimensions/${index}/field`,
+          ['Use a date or instant field.'],
+        ));
+      }
+      if (dimension.timezone !== context.input.calendar.timezone) {
+        return fail(semanticError(
+          'The time-bucket timezone is not available in this calendar policy.',
+          `/dimensions/${index}/timezone`,
+          [context.input.calendar.timezone],
+        ));
+      }
+      dimensions.push({
         kind: 'calendarPeriod',
         output,
         field: field.value,
         grain: dimension.grain,
         timezone: dimension.timezone,
+        weekStart: context.input.calendar.weekStart,
+        fiscalDayStart: context.input.calendar.fiscalDayStart,
         resultKind: 'calendarPeriod',
       });
+    } else {
+      shape = fieldResultShape(dimension.id, document);
+      dimensions.push({ kind: 'field', output, field: field.value });
+    }
     outputs.set(dimension.id, {
       output,
       type: field.value.type,

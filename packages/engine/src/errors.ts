@@ -46,7 +46,7 @@ export function repairableError(
   message: string,
   path: string,
   alternatives: LegalAlternatives,
-  remedy: string,
+  remedy: NonNullable<EngineError['remedy']>,
 ): EngineError {
   return { code, message, path, alternatives, remedy };
 }

@@ -232,7 +232,12 @@ export function compileInput(query: unknown): CompileQueryInput {
     anchor: InstantValueSchema.parse('2024-03-06T12:34:56Z'),
     channel: 'model',
     limits,
-    calendar: { timezone: 'UTC', weekStartsOn: 'monday' },
+    calendar: {
+      timezone: 'UTC',
+      timezoneDatabase: 'fixed-offset',
+      weekStart: 'monday',
+      fiscalDayStart: '00:00:00',
+    },
     binding,
     adapter: adapterDescriptor,
     costGate: {

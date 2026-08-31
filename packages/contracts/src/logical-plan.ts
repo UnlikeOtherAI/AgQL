@@ -11,6 +11,8 @@ import type {
   SourceQueryHash,
 } from '@agql/schemas';
 
+import type { CalendarGrain } from './result.ts';
+
 declare const physicalIdentifierBrand: unique symbol;
 declare const queryVectorDigestBrand: unique symbol;
 
@@ -163,8 +165,11 @@ export type ResolvedDimension =
     readonly kind: 'calendarPeriod';
     readonly output: ResolvedOutputBinding;
     readonly field: ResolvedFieldBinding;
-    readonly grain: 'day' | 'week' | 'month' | 'quarter' | 'year';
+    readonly grain: CalendarGrain;
     readonly timezone: string;
+    readonly weekStart: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday'
+      | 'saturday' | 'sunday';
+    readonly fiscalDayStart: string;
     readonly resultKind: 'calendarPeriod';
   };
 

@@ -8,26 +8,52 @@ import type {
 
 import type {
   CatalogPhysicalIdentifier,
+  ExpandedScope,
   LogicalPlanForProfile,
   ResolvedDatasetBinding,
   ResolvedFieldBinding,
   RuntimeOwnedVector,
   TypedValue,
 } from './logical-plan.ts';
-import type { WriteReceipt } from './receipt.ts';
+import type { IngestResult, WriteReceipt } from './receipt.ts';
+import type { CalendarPeriodValue } from './result.ts';
 
-type AdapterRefusalCode =
+/**
+ * Values an adapter may return after executing a resolved plan. This deliberately widens
+ * query-bound `TypedValue`: calendar periods are result-only values, never predicate or
+ * ingest scalars.
+ */
+export type AdapterResultValue =
+  | TypedValue
+  | { readonly kind: 'calendarPeriod'; readonly value: CalendarPeriodValue };
+
+export type AdapterRefusalCode =
   | 'UNSUPPORTED_PROFILE'
   | 'SCOPE_UNENFORCEABLE'
   | 'EXACT_SCAN_BUDGET_EXCEEDED'
   | 'FRESHNESS_UNAVAILABLE'
   | 'EMBEDDING_NOT_INDEXED'
   | 'FILTER_SHAPE_UNCERTIFIED'
-  | 'COST_GATE_REFUSAL';
+  | 'COST_GATE_REFUSAL'
+  | 'AFTER_WRITE_TIMEOUT';
 
-export interface AdapterRefusal extends AgqlErrorBase<AdapterRefusalCode> {
-  readonly remedy: string;
-}
+export type AdapterRefusal =
+  | (AgqlErrorBase<Exclude<AdapterRefusalCode, 'AFTER_WRITE_TIMEOUT'>> & {
+    readonly remedy: string;
+  })
+  | {
+    readonly code: 'AFTER_WRITE_TIMEOUT';
+    readonly message: string;
+    readonly path: '/afterWrite';
+    readonly alternatives: readonly ['Retry with the same receipt and requirements.'];
+    readonly remedy: {
+      readonly action: 'retryAfterWrite';
+      readonly details: {
+        readonly receipt: string;
+        readonly require: readonly [string, ...string[]];
+      };
+    };
+  };
 
 export type AdapterOutcome<T> =
   | { readonly kind: 'success'; readonly value: T }
@@ -47,7 +73,7 @@ export interface AdapterDescriptor<P extends readonly CapabilityProfile[]> {
 }
 
 /** Positional values keyed by resolved output slots; model-authored ids stay engine-side. */
-export type AdapterRow = readonly TypedValue[];
+export type AdapterRow = readonly AdapterResultValue[];
 
 export interface AdapterExecutionResult {
   readonly rows: readonly AdapterRow[];
@@ -75,7 +101,7 @@ export interface QueryAdapterOperations<
 
 export interface CanonicalIngestOperations<CompiledWrite> {
   compile(plan: CanonicalIngestPlan): Promise<AdapterOutcome<CompiledWrite>>;
-  execute(compiled: CompiledWrite): Promise<AdapterOutcome<WriteReceipt>>;
+  execute(compiled: CompiledWrite): Promise<AdapterOutcome<IngestResult>>;
 }
 
 export interface ResolvedCanonicalFieldValue {
@@ -87,6 +113,7 @@ interface CanonicalIngestPlanBase {
   readonly dataset: ResolvedDatasetBinding;
   readonly idField: ResolvedFieldBinding;
   readonly scopeFingerprint: ScopeFingerprint;
+  readonly scope: ExpandedScope;
   readonly idempotencyKey: string;
   readonly embeddingPolicy: 'catalog';
 }
@@ -154,6 +181,10 @@ export interface VisibilityObservation {
   readonly require: readonly [string, ...string[]];
   readonly timeoutMs: SafeInteger;
   readonly anchor: InstantValue;
+  readonly scopeFingerprint: ScopeFingerprint;
+  readonly scope: ExpandedScope;
+  readonly dataset: ResolvedDatasetBinding;
+  readonly idField: ResolvedFieldBinding;
 }
 
 export interface VisibilityOperations {
