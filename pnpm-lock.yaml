@@ -72,6 +72,28 @@ importers:
         specifier: ^4.20.5
         version: 4.23.13
 
+  packages/conformance:
+    dependencies:
+      '@agql/adapter-sqlite':
+        specifier: workspace:*
+        version: link:../adapter-sqlite
+      '@agql/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      '@agql/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@agql/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@agql/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+    devDependencies:
+      tsx:
+        specifier: ^4.20.5
+        version: 4.23.13
+
   packages/contracts:
     dependencies:
       '@agql/catalog':

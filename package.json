@@ -9,6 +9,8 @@
   },
   "scripts": {
     "build": "pnpm lint && pnpm typecheck",
+    "conformance": "pnpm --filter @agql/conformance conformance",
+    "conformance:exhaustive": "pnpm --filter @agql/conformance conformance:exhaustive",
     "lint": "eslint . --max-warnings 0",
     "test": "pnpm --recursive --if-present test",
     "typecheck": "tsc --noEmit"
@@ -22,4 +24,3 @@
     "typescript-eslint": "^8.41.0"
   }
 }
-

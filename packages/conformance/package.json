@@ -1,0 +1,22 @@
+{
+  "name": "@agql/conformance",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "tsx --test 'src/**/*.test.ts'",
+    "conformance": "tsx src/cli.ts",
+    "conformance:exhaustive": "tsx src/cli.ts --tier exhaustive"
+  },
+  "dependencies": {
+    "@agql/adapter-sqlite": "workspace:*",
+    "@agql/catalog": "workspace:*",
+    "@agql/contracts": "workspace:*",
+    "@agql/engine": "workspace:*",
+    "@agql/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5"
+  }
+}
