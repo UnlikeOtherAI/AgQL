@@ -171,7 +171,26 @@ export interface PostgresDeployment {
   readonly binding: EngineBinding;
   readonly datasets: readonly PostgresDatasetBinding[];
   provision(): Promise<void>;
+  ready(): Promise<void>;
   close(): Promise<void>;
+}
+
+function quotedRole(value: string): string {
+  if (value.length === 0 || value.length > 63 || value.includes('\u0000')) {
+    throw new TypeError('The PostgreSQL query role is not a valid identifier.');
+  }
+  return `"${value.replace(/"/gu, '""')}"`;
+}
+
+function quotedIdentifier(value: CatalogPhysicalIdentifier): string {
+  return `"${value.replace(/"/gu, '""')}"`;
+}
+
+function quotedRelation(
+  namespace: CatalogPhysicalIdentifier,
+  relation: CatalogPhysicalIdentifier,
+): string {
+  return `${quotedIdentifier(namespace)}.${quotedIdentifier(relation)}`;
 }
 
 /**
@@ -239,6 +258,22 @@ export function createPostgresDeployment(
         if (outcome.kind === 'refusal') {
           throw new TypeError(`${outcome.code}: ${outcome.message} ${outcome.remedy}`);
         }
+      }
+    },
+    async ready(): Promise<void> {
+      const client = await queryPool.connect();
+      try {
+        await client.query(`SET ROLE ${quotedRole(queryRole)}`);
+        await client.query('SELECT 1');
+        const relations = [
+          physical('_agql_idempotency'),
+          ...datasets.map((dataset) => dataset.dataset.physical),
+        ];
+        for (const relation of relations) {
+          await client.query(`SELECT 1 FROM ${quotedRelation(namespace, relation)} LIMIT 1`);
+        }
+      } finally {
+        client.release();
       }
     },
     async close(): Promise<void> {

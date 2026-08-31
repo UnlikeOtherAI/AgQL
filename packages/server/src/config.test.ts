@@ -15,12 +15,23 @@ function environment(
   capabilities?: string,
 ): NodeJS.ProcessEnv {
   return {
-    AGQL_APP_KEYS: 'configuration-test-key',
+    AGQL_APP_KEYS: 'app-v1:0123456789abcdef0123456789abcdef',
+    AGQL_RECEIPT_SECRET: 'receipt-v1:abcdefghijklmnopqrstuvwxyz0123456789abcdef',
     AGQL_CATALOG_PATH: starterCatalogPath,
     DATABASE_URL: 'postgresql://agql:unused@localhost:5432/agql',
     ...(capabilities === undefined ? {} : { AGQL_APP_CAPABILITIES: capabilities }),
   };
 }
+
+test('receipt signing requires an independent configured secret', async () => {
+  const missing = environment('starter');
+  delete missing.AGQL_RECEIPT_SECRET;
+  await assert.rejects(
+    loadServerConfiguration(missing),
+    (error: unknown) => error instanceof ConfigurationError
+      && error.message === 'AGQL_RECEIPT_SECRET is required.',
+  );
+});
 
 test('deployment capabilities require catalog-declared tags', async () => {
   await assert.rejects(

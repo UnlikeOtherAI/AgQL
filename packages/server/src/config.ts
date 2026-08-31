@@ -9,9 +9,21 @@ export const DEFAULT_SOURCE_ID = 'default';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+export interface ServerKey {
+  readonly id: string;
+  readonly secret: Uint8Array;
+}
+
+export function activeReceiptSecret(keys: readonly ServerKey[]): Uint8Array {
+  const key = keys[0];
+  if (key === undefined) throw new ConfigurationError('AGQL_RECEIPT_SECRET is required.');
+  return key.secret.slice();
+}
+
 export interface ServerConfig {
   readonly port: number;
-  readonly appKeys: readonly string[];
+  readonly appKeys: readonly ServerKey[];
+  readonly receiptKeys: readonly ServerKey[];
   readonly appCapabilities: readonly string[];
   readonly catalogPath: string;
   readonly databaseUrl: string;
@@ -26,7 +38,8 @@ export interface LoadedServerConfiguration {
 
 interface ServerBootstrapConfig {
   readonly port: number;
-  readonly appKeys: readonly string[];
+  readonly appKeys: readonly ServerKey[];
+  readonly receiptKeys: readonly ServerKey[];
   readonly catalogPath: string;
   readonly databaseUrl: string;
   readonly embedder: 'deterministic';
@@ -72,9 +85,34 @@ function commaSeparatedValues(
   return values;
 }
 
-function appKeys(environment: NodeJS.ProcessEnv): readonly string[] {
-  const values = required(environment, 'AGQL_APP_KEYS');
-  return commaSeparatedValues(values, 'AGQL_APP_KEYS');
+function keyedSecrets(environment: NodeJS.ProcessEnv, name: string): readonly ServerKey[] {
+  const values = commaSeparatedValues(required(environment, name), name);
+  const keys = values.map((value) => {
+    const separator = value.indexOf(':');
+    const id = value.slice(0, separator);
+    const secret = value.slice(separator + 1);
+    if (separator < 1 || !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(id)) {
+      throw new ConfigurationError(
+        `${name} entries must use key-id:secret with a safe nonempty key id.`,
+      );
+    }
+    if (Buffer.byteLength(secret, 'utf8') < 32) {
+      throw new ConfigurationError(`${name} secrets must contain at least 32 UTF-8 bytes.`);
+    }
+    return { id, secret: Buffer.from(secret, 'utf8') };
+  });
+  if (new Set(keys.map((key) => key.id)).size !== keys.length) {
+    throw new ConfigurationError(`${name} must not contain duplicate key ids.`);
+  }
+  return keys;
+}
+
+function appKeys(environment: NodeJS.ProcessEnv): readonly ServerKey[] {
+  return keyedSecrets(environment, 'AGQL_APP_KEYS');
+}
+
+function receiptKeys(environment: NodeJS.ProcessEnv): readonly ServerKey[] {
+  return keyedSecrets(environment, 'AGQL_RECEIPT_SECRET');
 }
 
 function embedder(environment: NodeJS.ProcessEnv): 'deterministic' {
@@ -100,6 +138,7 @@ function readServerBootstrapConfig(
   return {
     port: port(environment),
     appKeys: appKeys(environment),
+    receiptKeys: receiptKeys(environment),
     catalogPath: required(environment, 'AGQL_CATALOG_PATH'),
     databaseUrl: required(environment, 'DATABASE_URL'),
     embedder: embedder(environment),

@@ -435,9 +435,9 @@ export async function executeCanonicalIngest(
     await storeIngestResult(client, config, result);
     await client.query('COMMIT');
     return { kind: 'success', value: result };
-  } catch {
+  } catch (error: unknown) {
     await rollback(client);
-    return backendRefusal();
+    return backendRefusal(error);
   } finally {
     client.release();
   }

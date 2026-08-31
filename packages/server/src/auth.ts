@@ -15,6 +15,8 @@ import {
 } from '@agql/schemas';
 import type { InstantValue } from '@agql/schemas';
 
+import type { ServerKey } from './config.ts';
+
 export type ServerAuthenticationCode =
   | 'AUTHENTICATION_REQUIRED'
   | 'AUTHENTICATION_INVALID'
@@ -30,7 +32,7 @@ export interface ServerAuthenticationRefusal {
 
 export interface AuthenticatedAgent {
   readonly subject: string;
-  readonly credentialFingerprint: string;
+  readonly keyId: string;
 }
 
 export type AgentIdentityAuthentication =
@@ -50,8 +52,8 @@ export interface ScopeResolver {
   ): Promise<Scope>;
 }
 
-function credentialDigest(value: string): Buffer {
-  return createHash('sha256').update(value, 'utf8').digest();
+function credentialDigest(value: string | Uint8Array): Buffer {
+  return createHash('sha256').update(value).digest();
 }
 
 function bearerToken(request: Request): string | undefined {
@@ -62,11 +64,14 @@ function bearerToken(request: Request): string | undefined {
 }
 
 export class BearerKeyAuthenticator implements AgentIdentityAuthenticator {
-  readonly #digests: readonly Buffer[];
+  readonly #keys: readonly { readonly id: string; readonly digest: Buffer }[];
 
-  public constructor(keys: readonly string[]) {
+  public constructor(keys: readonly ServerKey[]) {
     if (keys.length === 0) throw new TypeError('Bearer authentication requires at least one key.');
-    this.#digests = keys.map(credentialDigest);
+    if (new Set(keys.map((key) => key.id)).size !== keys.length) {
+      throw new TypeError('Bearer authentication key ids must be unique.');
+    }
+    this.#keys = keys.map((key) => ({ id: key.id, digest: credentialDigest(key.secret) }));
   }
 
   public authenticateAgent(request: Request): Promise<AgentIdentityAuthentication> {
@@ -81,23 +86,26 @@ export class BearerKeyAuthenticator implements AgentIdentityAuthenticator {
     }
     const supplied = credentialDigest(token);
     let matched = false;
-    for (const candidate of this.#digests) {
-      matched = timingSafeEqual(supplied, candidate) || matched;
+    let keyId: string | undefined;
+    for (const candidate of this.#keys) {
+      const equal = timingSafeEqual(supplied, candidate.digest);
+      if (equal) keyId = candidate.id;
+      matched = equal || matched;
     }
     if (!matched) {
       return Promise.resolve({
         ok: false,
-        status: 403,
+        status: 401,
         code: 'AUTHENTICATION_INVALID',
         message: 'The supplied bearer credential is not accepted.',
       });
     }
-    const fingerprint = supplied.toString('hex');
+    if (keyId === undefined) throw new TypeError('A matched bearer key must have an identifier.');
     return Promise.resolve({
       ok: true,
       principal: {
-        subject: `app:${fingerprint}`,
-        credentialFingerprint: `sha256:${fingerprint}`,
+        subject: `app:${keyId}`,
+        keyId,
       },
     });
   }

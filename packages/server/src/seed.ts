@@ -6,16 +6,16 @@ import {
   InstantValueSchema,
   validateIngestDocument,
 } from '@agql/schemas';
-import type { IngestDocument } from '@agql/schemas';
+import type { CatalogDocument, IngestDocument } from '@agql/schemas';
 
 import { createPostgresDeployment } from './bindings.ts';
 import {
   DEFAULT_SOURCE_ID,
+  activeReceiptSecret,
   loadServerConfiguration,
 } from './config.ts';
 import { DeterministicEmbedderRegistry, validateDeterministicCatalog } from './embedder.ts';
 import { ServerRuntime } from './runtime.ts';
-import { applicationSecret } from './service.ts';
 
 interface SeedRecord {
   readonly dataset: string;
@@ -73,26 +73,41 @@ function documents(rows: readonly SeedRecord[]): readonly IngestDocument[] {
   });
 }
 
+function seedCapabilities(
+  catalog: CatalogDocument,
+  rows: readonly SeedRecord[],
+): readonly string[] {
+  const capabilities = new Set<string>(['ingest.canonical.v0']);
+  for (const row of rows) {
+    const dataset = catalog.datasets[row.dataset];
+    if (dataset === undefined) {
+      throw new TypeError(`Starter ingest references unavailable dataset ${row.dataset}.`);
+    }
+    for (const tag of dataset.capabilityTags) capabilities.add(tag);
+  }
+  return [...capabilities].sort();
+}
+
 async function main(): Promise<void> {
   const { config, catalog } = await loadServerConfiguration();
   validateDeterministicCatalog(catalog);
   const deployment = createPostgresDeployment(catalog, {
     databaseUrl: config.databaseUrl,
-    tokenSecret: applicationSecret(config.appKeys),
+    tokenSecret: activeReceiptSecret(config.receiptKeys),
   });
   try {
-    await deployment.provision();
     const runtime = new ServerRuntime({
       sourceId: DEFAULT_SOURCE_ID,
       catalog,
       binding: deployment.binding,
       adapter: deployment.adapter,
       embedders: new DeterministicEmbedderRegistry(),
-      receiptCodec: new HmacExecutionReceiptCodec(applicationSecret(config.appKeys)),
+      receiptCodec: new HmacExecutionReceiptCodec(config.receiptKeys),
     });
+    const seed = await records();
     const scope = ScopeSchema.parse({
       principal: 'agql:starter-seed',
-      capabilities: ['ingest.canonical.v0'],
+      capabilities: seedCapabilities(catalog, seed),
       partitions: { kind: 'unpartitioned' },
       budgets: {
         maximumQueries: 1_000,
@@ -101,7 +116,6 @@ async function main(): Promise<void> {
       },
       expiresAt: '9999-12-31T23:59:59Z',
     });
-    const seed = await records();
     for (const document of documents(seed)) {
       const result = await runtime.putRecords({
         credentialKind: 'agent',

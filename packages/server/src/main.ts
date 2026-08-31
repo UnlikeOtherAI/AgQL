@@ -1,15 +1,20 @@
 #!/usr/bin/env -S tsx
-import {
-  createDeploymentServer,
-} from './service.ts';
+import { createPostgresDeployment } from './bindings.ts';
+import { createDeploymentServer } from './service.ts';
 import {
   ConfigurationError,
+  activeReceiptSecret,
   loadServerConfiguration,
 } from './config.ts';
 
 async function main(): Promise<void> {
   const { config, catalog } = await loadServerConfiguration();
-  const server = createDeploymentServer({ config, catalog });
+  const deployment = createPostgresDeployment(catalog, {
+    databaseUrl: config.databaseUrl,
+    tokenSecret: activeReceiptSecret(config.receiptKeys),
+  });
+  await deployment.provision();
+  const server = createDeploymentServer({ config, catalog, deployment });
   await server.listen(config.port);
   let stopping = false;
   const shutdown = async (): Promise<void> => {

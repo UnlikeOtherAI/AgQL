@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { once } from 'node:events';
@@ -40,6 +40,7 @@ import type { PostgresDeployment } from './bindings.ts';
 import {
   DEFAULT_SOURCE_ID,
   SERVER_VERSION,
+  activeReceiptSecret,
   validateApplicationCapabilities,
 } from './config.ts';
 import type { LogLevel, ServerConfig } from './config.ts';
@@ -56,6 +57,7 @@ interface LogFields {
   readonly status?: number;
   readonly durationMs?: number;
   readonly catalogVersion?: string;
+  readonly principal?: string;
 }
 
 const LOG_SEVERITY: Readonly<Record<LogLevel, number>> = {
@@ -80,16 +82,6 @@ export class JsonLogger implements StructuredLogger {
     if (LOG_SEVERITY[level] < LOG_SEVERITY[this.#level]) return;
     process.stdout.write(`${JSON.stringify({ level, event, ...fields })}\n`);
   }
-}
-
-export function applicationSecret(keys: readonly string[]): Uint8Array {
-  const hash = createHash('sha256');
-  hash.update('agql-server-execution-receipts-v1\u0000', 'utf8');
-  for (const key of keys) {
-    hash.update(key, 'utf8');
-    hash.update('\u0000', 'utf8');
-  }
-  return hash.digest();
 }
 
 function unavailablePrincipalResults(): PrincipalResultPort {
@@ -134,10 +126,12 @@ interface AgentFailure {
   readonly message: string;
 }
 
-function json(value: unknown, status: number): Response {
+function json(value: unknown, status: number, headers: HeadersInit = {}): Response {
+  const responseHeaders = new Headers(headers);
+  responseHeaders.set('content-type', 'application/json');
   return new Response(JSON.stringify(value), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: responseHeaders,
   });
 }
 
@@ -148,13 +142,16 @@ function agentFailure(path: string, failure: AgentFailure): Response {
     path: '',
     alternatives: [],
   };
+  const headers = failure.status === 401
+    ? { 'www-authenticate': 'Bearer realm="agql"' }
+    : {};
   if (path === '/mcp') {
     return json({
       jsonrpc: '2.0',
       error: { code: -32_000, message: failure.message, data: error },
-    }, failure.status);
+    }, failure.status, headers);
   }
-  return json({ status: 'rejected', errors: [error] }, failure.status);
+  return json({ status: 'rejected', errors: [error] }, failure.status, headers);
 }
 
 function cachedAuthenticator(
@@ -162,6 +159,7 @@ function cachedAuthenticator(
 ): {
   readonly cached: McpAgentAuthenticator;
   readonly authorize: (request: Request) => Promise<Response | undefined>;
+  readonly principal: (request: Request) => string | undefined;
 } {
   const cache = new WeakMap<Request, AgentAuthentication>();
   return {
@@ -177,6 +175,10 @@ function cachedAuthenticator(
       if (!result.ok) return agentFailure(new URL(request.url).pathname, result);
       cache.set(request, result);
       return undefined;
+    },
+    principal(request: Request): string | undefined {
+      const authenticated = cache.get(request);
+      return authenticated?.ok ? authenticated.context.scope.principal : undefined;
     },
   };
 }
@@ -242,7 +244,8 @@ export interface ServerApplicationOptions {
   readonly closeRuntime?: () => Promise<void>;
   readonly principalAuthenticator?: PrincipalAuthenticator;
   readonly principalResults?: PrincipalResultPort;
-  readonly receiptCodec?: HmacExecutionReceiptCodec;
+  readonly receiptCodec: HmacExecutionReceiptCodec;
+  readonly ready?: () => Promise<void>;
 }
 
 /** An actual HTTP listener around the already-normative MCP and HTTP handlers. */
@@ -252,6 +255,8 @@ export class ServerApplication {
   readonly #mcp: (request: Request) => Promise<Response>;
   readonly #agent: (request: Request) => Promise<Response>;
   readonly #principal: (request: Request) => Promise<Response>;
+  readonly #ready: (() => Promise<void>) | undefined;
+  readonly #principalFor: (request: Request) => string | undefined;
   readonly #authorize: (request: Request) => Promise<Response | undefined>;
   readonly #closeRuntime: () => Promise<void>;
   readonly #server: Server;
@@ -263,8 +268,7 @@ export class ServerApplication {
     this.#closeRuntime = options.closeRuntime ?? (() => Promise.resolve());
     const sourceId = options.sourceId ?? DEFAULT_SOURCE_ID;
     const catalog = new ScopedCatalogProfile([{ id: sourceId, catalog: options.catalog }]);
-    const receipts = options.receiptCodec
-      ?? new HmacExecutionReceiptCodec(applicationSecret([options.catalog.catalogVersion]));
+    const receipts = options.receiptCodec;
     const savedQueries = new VerifiedSavedQueryStore(receipts, {
       identity(source) {
         return source === sourceId
@@ -284,6 +288,8 @@ export class ServerApplication {
     });
     const authenticated = cachedAuthenticator(options.agentAuthenticator);
     this.#authorize = authenticated.authorize;
+    this.#principalFor = authenticated.principal;
+    this.#ready = options.ready;
     this.#mcp = createMcpHttpHandler(mcp, authenticated.cached);
     this.#agent = createAgentHttpHandler(
       options.runtime,
@@ -308,6 +314,31 @@ export class ServerApplication {
         version: SERVER_VERSION,
         catalog: this.#catalog.catalogVersion,
       }, 200);
+    }
+    if (url.pathname === '/ready' && request.method === 'GET') {
+      if (this.#ready === undefined) {
+        return json({
+          ok: false,
+          version: SERVER_VERSION,
+          catalog: this.#catalog.catalogVersion,
+          error: { code: 'DATABASE_NOT_READY', message: 'Database readiness is not configured.' },
+        }, 503);
+      }
+      try {
+        await this.#ready();
+        return json({
+          ok: true,
+          version: SERVER_VERSION,
+          catalog: this.#catalog.catalogVersion,
+        }, 200);
+      } catch {
+        return json({
+          ok: false,
+          version: SERVER_VERSION,
+          catalog: this.#catalog.catalogVersion,
+          error: { code: 'DATABASE_NOT_READY', message: 'Database schema or role is unavailable.' },
+        }, 503);
+      }
     }
     if (url.pathname === '/mcp') {
       const denied = await this.#authorize(request);
@@ -335,7 +366,9 @@ export class ServerApplication {
         await writeFetchResponse(json({ message: 'Server is shutting down.' }, 503), response);
         return;
       }
-      const result = await this.fetch(await fetchRequest(request, requestId));
+      const operation = await fetchRequest(request, requestId);
+      const result = await this.fetch(operation);
+      const principal = this.#principalFor(operation);
       await writeFetchResponse(result, response);
       this.#logger.log('info', 'request.completed', {
         requestId,
@@ -343,6 +376,9 @@ export class ServerApplication {
         path,
         status: result.status,
         durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+        ...(principal === undefined
+          ? {}
+          : { principal }),
       });
     } catch {
       if (!response.headersSent) {
@@ -398,9 +434,9 @@ export function createDeploymentServer(options: DeploymentServerOptions): Server
   validateApplicationCapabilities(options.config.appCapabilities, options.catalog);
   const deployment = options.deployment ?? createPostgresDeployment(options.catalog, {
     databaseUrl: options.config.databaseUrl,
-    tokenSecret: applicationSecret(options.config.appKeys),
+    tokenSecret: activeReceiptSecret(options.config.receiptKeys),
   });
-  const receiptCodec = new HmacExecutionReceiptCodec(applicationSecret(options.config.appKeys));
+  const receiptCodec = new HmacExecutionReceiptCodec(options.config.receiptKeys);
   const runtime = new ServerRuntime({
     sourceId: DEFAULT_SOURCE_ID,
     catalog: options.catalog,
@@ -419,5 +455,6 @@ export function createDeploymentServer(options: DeploymentServerOptions): Server
     logger: options.logger ?? new JsonLogger(options.config.logLevel),
     closeRuntime: () => deployment.close(),
     receiptCodec,
+    ready: () => deployment.ready(),
   });
 }

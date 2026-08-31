@@ -233,9 +233,9 @@ export async function observeVisibility(
       }
       await pause(Math.min(25, Math.max(1, deadline - performance.now())));
     }
-  } catch {
+  } catch (error: unknown) {
     await rollback(client);
-    return backendRefusal();
+    return backendRefusal(error);
   } finally {
     client.release();
   }

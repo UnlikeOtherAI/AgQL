@@ -1,5 +1,6 @@
 import {
   accessRuleAllows,
+  datasetCapabilitiesAllow,
   deriveEmbeddingSearchPolicy,
 } from '@agql/catalog';
 import type { CatalogDocument, FieldPolicy } from '@agql/schemas';
@@ -32,7 +33,7 @@ export function availableDatasetReferences(
 ): readonly string[] {
   return Object.entries(catalog.datasets)
     .filter(([id, dataset]) => binding.datasets[id] !== undefined
-      && dataset.capabilityTags.every((tag) => scope.capabilities.includes(tag)))
+      && datasetCapabilitiesAllow(dataset, scope))
     .map(([id]) => id)
     .sort();
 }
@@ -40,8 +41,7 @@ export function availableDatasetReferences(
 export function authorizedDataset(
   context: Pick<CompileContext, 'dataset' | 'scope' | 'input'>,
 ): EngineResult<true> {
-  const allowed = context.dataset.capabilityTags.every((tag) =>
-    context.scope.capabilities.includes(tag));
+  const allowed = datasetCapabilitiesAllow(context.dataset, context.scope);
   return allowed
     ? { ok: true, value: true }
     : fail(unavailableReference('/from', availableDatasetReferences(

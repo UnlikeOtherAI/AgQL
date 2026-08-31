@@ -229,19 +229,19 @@ async function createDataset(
     `PRIMARY KEY (${quoteIdentifier(dataset.idField.physical)})`,
   );
   const table = quoteQualified(config.namespace, dataset.dataset.physical);
-  await client.query(`CREATE TABLE ${table} (${fields.join(', ')})`);
+  await client.query(`CREATE TABLE IF NOT EXISTS ${table} (${fields.join(', ')})`);
   for (const physical of dataset.lexicalFields) {
     const field = dataset.fields.find((candidate) => candidate.physical === physical);
     if (field?.type.kind !== 'text') return false;
     const index = quoteIdentifier(
       generatedIndexName('fts', dataset.dataset.physical, physical),
     );
-    await client.query(`CREATE INDEX ${index} ON ${table} USING gin (`
+    await client.query(`CREATE INDEX IF NOT EXISTS ${index} ON ${table} USING gin (`
       + `to_tsvector('simple'::regconfig, ${quoteIdentifier(physical)}))`);
   }
   for (const embedding of dataset.embeddings) {
     const index = quoteIdentifier(embedding.annIndex);
-    await client.query(`CREATE INDEX ${index} ON ${table} USING hnsw (`
+    await client.query(`CREATE INDEX IF NOT EXISTS ${index} ON ${table} USING hnsw (`
       + `${quoteIdentifier(embedding.embedding.physical)} `
       + `${pgvectorOpclass(embedding.embedding.metric)})`);
   }

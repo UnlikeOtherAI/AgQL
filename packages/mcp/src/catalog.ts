@@ -71,7 +71,7 @@ function searchItems(documentation: ModelCatalogDocumentation): readonly Catalog
     for (const field of dataset.fields) {
       result.push({
         kind: 'field',
-        ref: `${dataset.id}.${field.id}`,
+        ref: field.id,
         description: field.definition.description,
         operations: field.operations,
       });
@@ -79,7 +79,7 @@ function searchItems(documentation: ModelCatalogDocumentation): readonly Catalog
     for (const embedding of dataset.embeddings) {
       result.push({
         kind: 'embedding',
-        ref: `${dataset.id}.${embedding.name}`,
+        ref: embedding.spec,
         description: `Semantic search surface backed by ${embedding.spec}.`,
         operations: ['semanticSearch'],
       });
@@ -93,10 +93,10 @@ function narrowedDataset(
   fieldRef: string,
 ): ModelDatasetDocumentation | undefined {
   const field = dataset.fields.find((candidate) =>
-    `${dataset.id}.${candidate.id}` === fieldRef);
+    candidate.id === fieldRef);
   if (field !== undefined) return { ...dataset, fields: [field], embeddings: [] };
   const embedding = dataset.embeddings.find((candidate) =>
-    `${dataset.id}.${candidate.name}` === fieldRef);
+    candidate.spec === fieldRef);
   if (embedding !== undefined) return { ...dataset, fields: [], embeddings: [embedding] };
   return undefined;
 }
@@ -206,7 +206,7 @@ export class ScopedCatalogProfile {
     if (!documentation.ok) return documentation;
     for (const dataset of documentation.value.datasets) {
       const field = dataset.fields.find((candidate) =>
-        `${dataset.id}.${candidate.id}` === fieldRef);
+        candidate.id === fieldRef);
       if (field?.definition.kind !== 'enum') continue;
       const values = field.definition.values.filter((value) =>
         matches(value.code, query) || matches(value.label, query));

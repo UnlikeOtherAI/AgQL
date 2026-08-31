@@ -11,6 +11,15 @@ import type { Scope } from './scope.ts';
 
 export type PolicyChannel = 'model' | 'principal';
 
+/** Dataset capability tags gate the whole scoped dataset vocabulary. */
+export function datasetCapabilitiesAllow(
+  dataset: Pick<DatasetDocument, 'capabilityTags'>,
+  scope: Pick<Scope, 'capabilities'>,
+): boolean {
+  const held = new Set(scope.capabilities);
+  return dataset.capabilityTags.every((tag) => held.has(tag));
+}
+
 export function accessRuleAllows(rule: AccessRule, scope: Scope): boolean {
   if (rule.effect === 'deny') return false;
   const held = new Set(scope.capabilities);
