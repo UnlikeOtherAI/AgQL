@@ -13,7 +13,6 @@ import type { ResultEnvelope } from '@agql/contracts';
 import type {
   AgentRequestContext,
   ExplainQueryValue,
-  PutRecordsOperationInput,
   QueryOperationInput,
   QueryRuntime,
   RunQueryValue,
@@ -163,10 +162,7 @@ class TransportRuntime implements QueryRuntime {
     });
   }
 
-  public putRecords(
-    _context: AgentRequestContext,
-    _input: PutRecordsOperationInput,
-  ): Promise<RuntimeOutcome<never>> {
+  public putRecords(): Promise<RuntimeOutcome<never>> {
     return Promise.resolve({
       ok: false,
       errors: [{
@@ -221,7 +217,7 @@ function mcpBody() {
   };
 }
 
-test('server listener protects routes and keeps MCP, HTTP, and principal channels separate', async () => {
+test('server listener protects MCP, HTTP, and principal channels', async () => {
   const application = new ServerApplication({
     catalog,
     runtime: new TransportRuntime(),
