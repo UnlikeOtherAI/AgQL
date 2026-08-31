@@ -1,0 +1,30 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.decimal-precision-scale-boundaries",
+  "rfc": ["§2", "§4", "§11"],
+  "brief": ["§3.3", "§3.5"],
+  "rule": "Decimal precision and scale boundary behavior must be portable, but RFC v0 does not define the catalog syntax, limits, rounding rule, or overflow code.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-008",
+    "datasets": [{
+      "id": "measurements",
+      "description": "A proposed decimal(5,2) boundary dataset.",
+      "idField": "measurements.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "measurements.id", "description": "Stable measurement id.", "kind": "id", "nullable": false},
+        {"id": "measurements.value", "description": "Proposed decimal(5,2) field.", "kind": "decimal", "precision": 5, "scale": 2, "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "max", "value": "999.99"}, {"id": "min", "value": "-999.99"}, {"id": "scale-over", "value": "1.234"}, {"id": "precision-over", "value": "1000.00"}],
+  "query": {"version": "0", "mode": "records", "from": "measurements", "select": ["measurements.id", "measurements.value"], "order": [{"by": "measurements.id", "dir": "asc"}], "take": 10},
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "UNDETERMINED_BY_RFC_V0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
+    "gap": "RFC §2 names a canonical decimal string but gives neither decimal grammar nor precision/scale constraints; RFC §4 says fields are typed but does not require precision or scale members. It also does not say whether invalid seeded/stored JSON is rejected at ingest, catalog binding, or query read."
+  }
+}

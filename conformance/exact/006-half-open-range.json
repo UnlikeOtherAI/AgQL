@@ -1,0 +1,36 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.half-open-range",
+  "rfc": ["§5", "§11"],
+  "rule": "A lower-inclusive, upper-exclusive range includes the lower boundary and excludes the upper boundary.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-006",
+    "datasets": [{
+      "id": "samples",
+      "description": "Boundary samples.",
+      "idField": "samples.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "samples.id", "description": "Stable sample id.", "kind": "id", "nullable": false},
+        {"id": "samples.value", "description": "Boundary value.", "kind": "integer", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "below", "value": 9}, {"id": "lower", "value": 10}, {"id": "inside", "value": 19}, {"id": "upper", "value": 20}],
+  "query": {
+    "version": "0",
+    "mode": "records",
+    "from": "samples",
+    "select": ["samples.id", "samples.value"],
+    "where": {"kind": "and", "items": [
+      {"kind": "predicate", "field": "samples.value", "op": "gte", "value": 10},
+      {"kind": "predicate", "field": "samples.value", "op": "lt", "value": 20}
+    ]},
+    "order": [{"by": "samples.value", "dir": "asc"}, {"by": "samples.id", "dir": "asc"}],
+    "take": 10
+  },
+  "expected": {"outcome": "success", "semantic": {"rows": [{"samples.id": "lower", "samples.value": 10}, {"samples.id": "inside", "samples.value": 19}]}, "assertions": ["No backend-native BETWEEN semantics may replace the explicit gte/lt pair."]}
+}

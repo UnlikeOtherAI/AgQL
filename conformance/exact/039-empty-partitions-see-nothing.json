@@ -1,0 +1,25 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.security.empty-partitions-see-nothing",
+  "rfc": ["§6", "§9", "§11"],
+  "rule": "A required scope with an empty partition set means no rows are visible; it can never be interpreted as an absent filter or all partitions.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-039",
+    "datasets": [{
+      "id": "tenant_rows",
+      "description": "Tenant-partitioned rows.",
+      "idField": "tenant_rows.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "partition", "dimensions": ["tenant_rows.tenant"]},
+      "fields": [
+        {"id": "tenant_rows.id", "description": "Stable row id.", "kind": "id", "nullable": false},
+        {"id": "tenant_rows.tenant", "description": "Tenant partition code.", "kind": "enum", "nullable": false, "values": [{"code": "a", "label": "A"}, {"code": "b", "label": "B"}]}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:nobody", "capabilities": ["records.v0"], "partitions": {"tenant_rows.tenant": []}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "a-1", "tenant": "a"}, {"id": "b-1", "tenant": "b"}],
+  "query": {"version": "0", "mode": "records", "from": "tenant_rows", "select": ["tenant_rows.id"], "order": [{"by": "tenant_rows.id", "dir": "asc"}], "take": 10},
+  "expected": {"outcome": "success", "semantic": {"rows": []}, "assertions": ["The compiled backend plan contains an unsatisfiable scope predicate.", "No logical record content crosses the backend/adapter trust boundary."]}
+}

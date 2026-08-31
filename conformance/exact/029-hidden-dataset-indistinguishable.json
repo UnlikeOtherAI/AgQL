@@ -1,0 +1,29 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.security.hidden-dataset-indistinguishable",
+  "rfc": ["§6", "§10", "§11"],
+  "rule": "A reference to an existing but unauthorized dataset and a reference to a nonexistent dataset yield one byte-identical error shape.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-029",
+    "datasets": [
+      {"id": "public_notes", "description": "Visible notes.", "idField": "public_notes.id", "profiles": ["records.v0"], "rowScope": {"kind": "none", "reason": "Public conformance seed."}, "fields": [{"id": "public_notes.id", "description": "Stable note id.", "kind": "id", "nullable": false}]},
+      {"id": "secret_notes", "description": "Dataset hidden from the fixture principal.", "idField": "secret_notes.id", "profiles": ["records.v0"], "rowScope": {"kind": "none", "reason": "Policy hides the dataset."}, "fields": [{"id": "secret_notes.id", "description": "Stable secret note id.", "kind": "id", "nullable": false}]}
+    ]
+  },
+  "policy": {"version": "policy-exact-029", "datasets": {"public_notes": {"visible": true}, "secret_notes": {"visible": false}}},
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"dataset": "secret_notes", "record": {"id": "s-1"}}],
+  "queries": {
+    "unauthorized": {"version": "0", "mode": "records", "from": "secret_notes", "select": ["secret_notes.id"], "order": [{"by": "secret_notes.id", "dir": "asc"}], "take": 1},
+    "nonexistent": {"version": "0", "mode": "records", "from": "never_existed", "select": ["never_existed.id"], "order": [{"by": "never_existed.id", "dir": "asc"}], "take": 1}
+  },
+  "expected": {
+    "outcome": "paired-refusal",
+    "beforeBackend": true,
+    "compareWith": {"left": "queries.unauthorized", "right": "queries.nonexistent", "relation": "error-jcs-bytes-equal"},
+    "assertions": ["The error cannot prove that secret_notes exists.", "Legal alternatives list only public_notes."],
+    "errorShape": "UNDETERMINED_BY_RFC_V0",
+    "gap": "The equality requirement is normative, but the shared catalog-reference error shape is absent from RFC §10."
+  }
+}

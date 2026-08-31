@@ -1,0 +1,31 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.enum-code-not-label",
+  "rfc": ["§2", "§4", "§5", "§11"],
+  "rule": "An enum's stable code is its value; the display label is metadata and cannot be used as an equality value.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-012",
+    "datasets": [{
+      "id": "tasks",
+      "description": "Tasks with enum status codes.",
+      "idField": "tasks.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "tasks.id", "description": "Stable task id.", "kind": "id", "nullable": false},
+        {"id": "tasks.status", "description": "Stable task status.", "kind": "enum", "nullable": false, "values": [{"code": "in_progress", "label": "In progress"}, {"code": "done", "label": "Done"}]}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "task-1", "status": "in_progress"}, {"id": "task-2", "status": "done"}],
+  "query": {"version": "0", "mode": "records", "from": "tasks", "select": ["tasks.id", "tasks.status"], "where": {"kind": "predicate", "field": "tasks.status", "op": "eq", "value": "In progress"}, "order": [{"by": "tasks.id", "dir": "asc"}], "take": 10},
+  "expected": {
+    "outcome": "refusal",
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/where/value", "alternatives": ["done", "in_progress"]},
+    "beforeBackend": true,
+    "assertions": ["The label is not silently mapped to the code.", "Legal alternatives enumerate stable codes, not display labels."],
+    "gap": "RFC §10 does not name the invalid-enum-value code or sentence."
+  }
+}

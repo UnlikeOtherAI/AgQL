@@ -1,0 +1,34 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.pagination-reproducibility",
+  "rfc": ["§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "Pagination must preserve the same total order and cannot skip or duplicate tied rows, but RFC v0 defines take and no page or cursor request shape.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-003",
+    "datasets": [{
+      "id": "events",
+      "description": "Events with tied timestamps.",
+      "idField": "events.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "events.id", "description": "Stable event id.", "kind": "id", "nullable": false},
+        {"id": "events.at", "description": "Event instant.", "kind": "instant", "precision": "millisecond", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "e-1", "at": "2024-01-01T00:00:00.000Z"},
+    {"id": "e-2", "at": "2024-01-01T00:00:00.000Z"},
+    {"id": "e-3", "at": "2024-01-01T00:00:00.000Z"}
+  ],
+  "query": "UNDETERMINED_BY_RFC_V0",
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "assertions": ["Concatenating consecutive pages must equal the one-shot total order, with each eligible stable id appearing exactly once."],
+    "gap": "RFC §5 does not define pagination, cursor contents, cursor identity binding, snapshot interaction, or even an offset/page field."
+  }
+}

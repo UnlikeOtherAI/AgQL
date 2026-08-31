@@ -1,0 +1,35 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.identity.hash-one-way-semantic-equivalence",
+  "rfc": ["§3", "§11"],
+  "brief": ["§3.5"],
+  "rule": "Reordering commutative and operands preserves semantics but changes canonical bytes and sourceQueryHash; unequal hashes do not imply unequal semantics.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-031",
+    "datasets": [{
+      "id": "things",
+      "description": "Things filtered by two commutative predicates.",
+      "idField": "things.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "things.id", "description": "Stable thing id.", "kind": "id", "nullable": false},
+        {"id": "things.color", "description": "Thing color.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"},
+        {"id": "things.size", "description": "Thing size.", "kind": "integer", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "t-1", "color": "red", "size": 20}, {"id": "t-2", "color": "red", "size": 5}, {"id": "t-3", "color": "blue", "size": 20}],
+  "queries": {
+    "aAndB": {"version": "0", "mode": "records", "from": "things", "select": ["things.id"], "where": {"kind": "and", "items": [{"kind": "predicate", "field": "things.color", "op": "eq", "value": "red"}, {"kind": "predicate", "field": "things.size", "op": "gt", "value": 10}]}, "order": [{"by": "things.id", "dir": "asc"}], "take": 10},
+    "bAndA": {"version": "0", "mode": "records", "from": "things", "select": ["things.id"], "where": {"kind": "and", "items": [{"kind": "predicate", "field": "things.size", "op": "gt", "value": 10}, {"kind": "predicate", "field": "things.color", "op": "eq", "value": "red"}]}, "order": [{"by": "things.id", "dir": "asc"}], "take": 10}
+  },
+  "expected": {
+    "outcome": "paired-success",
+    "sourceQueryHashes": {"aAndB": "sha256:4912befa5b2bbda11aa47b31261ac02d1d407321d8f840edff55349c299f4e54", "bAndA": "sha256:e615fb6547f4655e5f435f84b00d9da908f90548416c89ed0805f6c99b42d1b1"},
+    "semantic": {"aAndB": {"rows": [{"things.id": "t-1"}]}, "bAndA": {"rows": [{"things.id": "t-1"}]}},
+    "assertions": ["The hashes differ.", "The semantic JCS results are equal.", "No semantic-equivalence normalization reorders the and.items array before hashing."]
+  }
+}

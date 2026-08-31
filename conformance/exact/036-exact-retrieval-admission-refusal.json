@@ -1,0 +1,29 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.retrieve.admission-refusal",
+  "rfc": ["§5", "§9", "§10", "§11"],
+  "brief": ["§3.5"],
+  "rule": "An exact retrieval whose eligible set exceeds the adapter's declared exact-scan admission limit returns a structured repairable refusal and never silently becomes approximate.",
+  "requiresProfile": "retrieve.semantic.v0",
+  "catalog": {
+    "version": "cat-exact-036",
+    "embeddingSpecs": [{"id": "body@1", "sourceFields": ["documents.body"], "inputTransform": "fixture-text-v1", "model": {"id": "fixture-axis", "revision": "sha256:fixture-axis-v1"}, "dimension": 2, "metric": "cosine", "vectorEncoding": "float32", "chunking": "none", "privacyClass": "public"}],
+    "datasets": [{"id": "documents", "description": "Four documents above a three-record exact admission limit.", "idField": "documents.id", "profiles": ["retrieve.semantic.v0"], "embeddings": {"body": "body@1"}, "rowScope": {"kind": "none", "reason": "Public conformance seed."}, "fields": [{"id": "documents.id", "description": "Stable document id.", "kind": "id", "nullable": false}, {"id": "documents.body", "description": "Document body.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"}]}]
+  },
+  "binding": {"version": "binding-exact-036", "exactEligibleSetMaximum": 3},
+  "scope": {"principal": "fixture:reader", "capabilities": ["retrieve.semantic.v0", "semanticSearch:body@1"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"record": {"id": "d-1", "body": "one"}, "derived": {"embedding:body@1": [1, 0]}},
+    {"record": {"id": "d-2", "body": "two"}, "derived": {"embedding:body@1": [0, 1]}},
+    {"record": {"id": "d-3", "body": "three"}, "derived": {"embedding:body@1": [-1, 0]}},
+    {"record": {"id": "d-4", "body": "four"}, "derived": {"embedding:body@1": [0, -1]}}
+  ],
+  "query": {"version": "0", "mode": "retrieve", "from": "documents", "select": ["documents.id"], "search": {"kind": "semantic", "using": "body@1", "text": "axis", "accuracy": "exact", "quality": "exact-oracle-v0"}, "take": 2},
+  "execution": {"anchor": "2024-01-01T00:00:00Z", "runtimeEmbedder": {"spec": "body@1", "queryVector": [1, 0]}},
+  "expected": {
+    "outcome": "refusal",
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/search/accuracy", "alternatives": ["Add a selective where predicate", "Request approximate accuracy if policy permits"]},
+    "assertions": ["No approximate neighbors are returned.", "The remedy identifies how to reduce the eligible set or explicitly request an available tier."],
+    "gap": "RFC §9 mandates a typed exact-scan budget refusal and remedy but RFC §10 does not name its code or sentence, and does not define whether admission counts may call the backend."
+  }
+}

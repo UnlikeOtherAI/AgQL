@@ -1,0 +1,22 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.aggregate.grouping-alias-ambiguity",
+  "rfc": ["§5", "§10", "§11"],
+  "brief": ["§5.1"],
+  "rule": "A dimension id and metric id that collide make output references ambiguous and must be refused rather than resolved by backend precedence.",
+  "requiresProfile": "aggregate.v0",
+  "catalog": {
+    "version": "cat-exact-032",
+    "datasets": [{"id": "orders", "description": "Orders for alias validation.", "idField": "orders.id", "profiles": ["aggregate.v0"], "rowScope": {"kind": "none", "reason": "Public conformance seed."}, "fields": [{"id": "orders.id", "description": "Stable order id.", "kind": "id", "nullable": false}, {"id": "orders.region", "description": "Order region.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"}]}]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["aggregate.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "o-1", "region": "north"}],
+  "query": {"version": "0", "mode": "aggregate", "from": "orders", "dimensions": [{"kind": "field", "field": "orders.region", "id": "total"}], "metrics": [{"id": "total", "op": "count"}], "having": {"kind": "predicate", "metric": "total", "op": "gt", "value": 0}, "order": [{"by": "total", "dir": "asc"}], "take": 10},
+  "expected": {
+    "outcome": "refusal",
+    "beforeBackend": true,
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/metrics/0/id", "alternatives": "UNDETERMINED_BY_RFC_V0"},
+    "assertions": ["Neither having nor order is bound using adapter-specific alias precedence."],
+    "gap": "The task and brief require this refusal, but RFC §5 does not state output-id uniqueness/namespace rules and RFC §10 does not provide the code or deterministic collision path."
+  }
+}

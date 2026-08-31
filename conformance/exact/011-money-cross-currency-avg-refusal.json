@@ -1,0 +1,31 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.aggregate.money-cross-currency-avg-refusal",
+  "rfc": ["§2", "§5", "§10", "§11"],
+  "rule": "avg over money containing more than one currency refuses without an explicit conversion definition.",
+  "requiresProfile": "aggregate.v0",
+  "catalog": {
+    "version": "cat-exact-011",
+    "datasets": [{
+      "id": "payments",
+      "description": "Payments in multiple currencies.",
+      "idField": "payments.id",
+      "profiles": ["aggregate.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "payments.id", "description": "Stable payment id.", "kind": "id", "nullable": false},
+        {"id": "payments.amount", "description": "Payment amount and currency.", "kind": "money", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["aggregate.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "p-gbp", "amount": {"amount": "1.00", "currency": "GBP"}}, {"id": "p-jpy", "amount": {"amount": "100", "currency": "JPY"}}],
+  "query": {"version": "0", "mode": "aggregate", "from": "payments", "dimensions": [], "metrics": [{"id": "mean", "op": "avg", "field": "payments.amount"}], "order": [{"by": "mean", "dir": "asc"}], "take": 1},
+  "expected": {
+    "outcome": "refusal",
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/metrics/0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
+    "beforeBackend": false,
+    "assertions": ["No averaged money value is returned."],
+    "gap": "The mandatory refusal has no machine code or complete error shape in RFC §10."
+  }
+}

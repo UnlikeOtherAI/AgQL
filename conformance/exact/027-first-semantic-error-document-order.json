@@ -1,0 +1,28 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.errors.first-semantic-document-order",
+  "rfc": ["§10", "§11"],
+  "rule": "After structural validity, only the first semantic error in document order is returned.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-027",
+    "datasets": [{
+      "id": "items",
+      "description": "Visible items.",
+      "idField": "items.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [{"id": "items.id", "description": "Stable item id.", "kind": "id", "nullable": false}]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "i-1"}],
+  "query": {"version": "0", "mode": "records", "from": "items", "select": ["items.id", "items.firstMissing", "items.secondMissing"], "where": {"kind": "predicate", "field": "items.thirdMissing", "op": "eq", "value": "x"}, "order": [{"by": "items.fourthMissing", "dir": "asc"}, {"by": "items.id", "dir": "asc"}], "take": 10},
+  "expected": {
+    "outcome": "refusal",
+    "beforeBackend": true,
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/select/1", "alternatives": ["items.id"]},
+    "assertions": ["Errors at /select/2, /where/field, and /order/0/by are not returned in this result."],
+    "gap": "The first erroneous array member is unambiguous, but RFC §10 does not name its code or sentence. More generally, 'document order' across object members is not defined relative to source insertion order, schema traversal, or post-JCS key order."
+  }
+}

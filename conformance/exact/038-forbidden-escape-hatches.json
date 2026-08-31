@@ -1,0 +1,25 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.security.forbidden-escape-hatches",
+  "rfc": ["§1", "§5", "§9", "§10"],
+  "rule": "Query Core has no write path, native-query passthrough, regex, UDF, or evaluable expression escape hatch.",
+  "requiresProfile": "records.v0",
+  "catalog": {"version": "cat-exact-038", "datasets": [{"id": "items", "description": "Rows that hostile constructs must never reach.", "idField": "items.id", "profiles": ["records.v0"], "rowScope": {"kind": "none", "reason": "Public conformance seed."}, "fields": [{"id": "items.id", "description": "Stable item id.", "kind": "id", "nullable": false}, {"id": "items.body", "description": "Item body.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"}]}]},
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "i-1", "body": "safe"}],
+  "cases": [
+    {"name": "raw-sql", "query": {"version": "0", "mode": "records", "from": "items", "rawSql": "DELETE FROM items", "select": ["items.id"], "order": [{"by": "items.id", "dir": "asc"}], "take": 1}},
+    {"name": "raw-pipeline", "query": {"version": "0", "mode": "records", "from": "items", "rawPipeline": [{"$out": "stolen"}], "select": ["items.id"], "order": [{"by": "items.id", "dir": "asc"}], "take": 1}},
+    {"name": "regex", "query": {"version": "0", "mode": "records", "from": "items", "where": {"kind": "predicate", "field": "items.body", "op": "regex", "value": ".*"}, "select": ["items.id"], "order": [{"by": "items.id", "dir": "asc"}], "take": 1}},
+    {"name": "udf", "query": {"version": "0", "mode": "records", "from": "items", "where": {"kind": "udf", "name": "alwaysTrue"}, "select": ["items.id"], "order": [{"by": "items.id", "dir": "asc"}], "take": 1}},
+    {"name": "expression", "query": {"version": "0", "mode": "records", "from": "items", "where": {"kind": "expression", "source": "process.exit()"}, "select": ["items.id"], "order": [{"by": "items.id", "dir": "asc"}], "take": 1}},
+    {"name": "query-write", "query": {"version": "0", "mode": "delete", "from": "items", "where": {"kind": "predicate", "field": "items.id", "op": "eq", "value": "i-1"}, "take": 1}}
+  ],
+  "expected": {
+    "outcomePerCase": "refusal",
+    "beforeBackend": true,
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "UNDETERMINED_BY_RFC_V0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
+    "assertions": ["The seed remains unchanged.", "No input string is parsed as backend syntax or executable code."],
+    "gap": "The prohibitions are normative, but RFC §10 does not assign their machine codes or define whether forbidden unknown members are structural errors or UNSUPPORTED_IN_V0."
+  }
+}
