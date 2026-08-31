@@ -1,3 +1,5 @@
+name: agql
+
 services:
   agql-api:
     build:
