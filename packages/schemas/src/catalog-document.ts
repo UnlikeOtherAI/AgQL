@@ -21,16 +21,60 @@ const BaseFieldShape = {
   nullable: z.boolean(),
 };
 
+const MoneyFieldDocumentSchema = z.object({
+  ...BaseFieldShape,
+  kind: z.literal('money'),
+  precision: z.number().int().min(1).max(38).optional(),
+  scale: z.number().int().min(0).max(38).optional(),
+  currencies: z.array(CurrencyCodeSchema).min(1).optional(),
+}).strict();
+
+function validateMoneyField(
+  field: z.infer<typeof MoneyFieldDocumentSchema>,
+  context: z.RefinementCtx,
+): void {
+  const declared = field.precision !== undefined
+    || field.scale !== undefined
+    || field.currencies !== undefined;
+  if (!declared) return;
+  if (field.precision === undefined || field.scale === undefined
+    || field.currencies === undefined) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Money fields declare precision, scale, and currencies together or omit all three.',
+    });
+    return;
+  }
+  if (field.scale > field.precision) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['scale'],
+      message: 'Money scale cannot exceed precision.',
+    });
+  }
+  for (const [index, currency] of field.currencies.entries()) {
+    const previous = field.currencies[index - 1];
+    if (previous !== undefined && previous >= currency) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['currencies', index],
+        message: 'Money currencies must be unique and sorted in ascending code order.',
+      });
+    }
+  }
+}
+
 export const FieldDocumentSchema = z.discriminatedUnion('kind', [
   z.object({ ...BaseFieldShape, kind: z.literal('id') }).strict(),
   z.object({ ...BaseFieldShape, kind: z.literal('boolean') }).strict(),
   z.object({ ...BaseFieldShape, kind: z.literal('integer') }).strict(),
-  z.object({ ...BaseFieldShape, kind: z.literal('decimal') }).strict(),
   z.object({
     ...BaseFieldShape,
-    kind: z.literal('money'),
-    currency: CurrencyCodeSchema,
+    kind: z.literal('decimal'),
+    precision: z.number().int().min(1).max(38).optional(),
+    scale: z.number().int().min(0).max(38).optional(),
   }).strict(),
+  MoneyFieldDocumentSchema,
   z.object({
     ...BaseFieldShape,
     kind: z.literal('text'),
@@ -54,7 +98,9 @@ export const FieldDocumentSchema = z.discriminatedUnion('kind', [
     precision: z.enum(['second', 'millisecond', 'microsecond', 'nanosecond']),
   }).strict(),
   z.object({ ...BaseFieldShape, kind: z.literal('null') }).strict(),
-]);
+]).superRefine((field, context) => {
+  if (field.kind === 'money') validateMoneyField(field, context);
+});
 
 export type FieldDocument = z.infer<typeof FieldDocumentSchema>;
 

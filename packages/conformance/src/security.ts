@@ -47,6 +47,7 @@ export type SecurityCaseObservation =
     };
 
 export interface SecurityProbeExecutor {
+  readonly adapterId: string;
   execute(
     fixture: SecurityFixture,
     probe: SecurityCase,
@@ -90,6 +91,7 @@ const RECEIPT_SECURITY = new Set([
 
 export function blockedSecurityExecutor(): SecurityProbeExecutor {
   return {
+    adapterId: 'not-configured',
     execute(fixture) {
       const receipt = RECEIPT_SECURITY.has(fixture.id);
       return Promise.resolve({
@@ -212,5 +214,5 @@ export async function runSecuritySuite(
   }
   const results: FixtureResult[] = [];
   for (const fixture of selected) results.push(await runFixture(fixture, executor, options));
-  return createSuiteReport(`security:${options.tier}`, results);
+  return createSuiteReport(`security:${executor.adapterId}`, results);
 }

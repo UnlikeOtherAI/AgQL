@@ -41,6 +41,18 @@ function sqliteText(value: unknown, field: ResolvedFieldBinding): string {
   return value;
 }
 
+function decimalAtFieldScale(value: string, field: ResolvedFieldBinding): CanonicalDecimal {
+  const parsed = CanonicalDecimalSchema.parse(value);
+  if (field.type.kind !== 'decimal' || field.type.scale === undefined) return parsed;
+  const sourceFraction = /\.(\d+)$/u.exec(value)?.[1] ?? '';
+  if (sourceFraction.length > field.type.scale) {
+    throw new TypeError(`SQLite returned ${field.logicalId} beyond its declared scale.`);
+  }
+  const [integer, fraction = ''] = parsed.split('.');
+  const suffix = field.type.scale === 0 ? '' : `.${fraction.padEnd(field.type.scale, '0')}`;
+  return `${integer ?? '0'}${suffix}` as CanonicalDecimal;
+}
+
 export function typedValueFromSqlite(value: unknown, field: ResolvedFieldBinding): TypedValue {
   if (value === null) {
     if (!field.nullable) throw new TypeError(`SQLite returned NULL for ${field.logicalId}.`);
@@ -59,10 +71,10 @@ export function typedValueFromSqlite(value: unknown, field: ResolvedFieldBinding
     case 'integer':
       return { kind: 'integer', value: sqliteInteger(value, field) };
     case 'decimal':
-      return { kind: 'decimal', value: CanonicalDecimalSchema.parse(sqliteText(value, field)) };
+      return { kind: 'decimal', value: decimalAtFieldScale(sqliteText(value, field), field) };
     case 'money': {
       const money = MoneyValueSchema.parse(parsedJson(sqliteText(value, field)));
-      if (money.currency !== field.type.currency) {
+      if (field.type.currencies !== undefined && !field.type.currencies.includes(money.currency)) {
         throw new TypeError(`SQLite returned an unexpected currency for ${field.logicalId}.`);
       }
       return { kind: 'money', value: money };

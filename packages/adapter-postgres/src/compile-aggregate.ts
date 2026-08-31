@@ -43,6 +43,20 @@ function aggregateFilter(
   return ` FILTER (WHERE ${filterSql({ ...context, alias: 'd' }, aggregate.filter)})`;
 }
 
+function moneyAggregateSql(
+  expression: string,
+  op: 'sum' | 'avg',
+  filter: string,
+): string {
+  const amount = `(${expression} ->> 'amount')::numeric`;
+  const currency = `(${expression} ->> 'currency')`;
+  const count = `COUNT(${expression})${filter}`;
+  const aggregate = `${op.toUpperCase()}(${amount})${filter}`;
+  const currencies = `jsonb_agg(DISTINCT ${currency} ORDER BY ${currency})${filter}`;
+  return `CASE WHEN ${count} = 0 THEN NULL ELSE jsonb_build_object(`
+    + `'amount', (${aggregate})::text, 'currencies', ${currencies}) END`;
+}
+
 function fieldAggregateSql(
   context: AggregateContext,
   aggregate: Exclude<ResolvedAggregateExpression, { readonly op: 'count' }>,
@@ -65,11 +79,30 @@ function fieldAggregateSql(
       && field.type.kind !== 'money') {
       throw new SqlCompilationError('sum and avg require integer, decimal, or money.', '/metrics');
     }
-    const codec: OutputCodec = field.type.kind === 'money'
-      ? field.type
-      : aggregate.op === 'sum' && field.type.kind === 'integer'
-        ? { kind: 'aggregateInteger' }
-        : { kind: 'aggregateDecimal' };
+    if (field.type.kind === 'money') {
+      const scale = field.type.scale === undefined
+        ? undefined
+        : aggregate.op === 'avg' ? Math.max(field.type.scale, 9) : field.type.scale;
+      return {
+        sql: moneyAggregateSql(expression, aggregate.op, filter),
+        codec: {
+          kind: 'aggregateMoney',
+          ...(field.type.currencies === undefined ? {} : { currencies: field.type.currencies }),
+          ...(scale === undefined ? {} : { scale }),
+        },
+        field,
+      };
+    }
+    const codec: OutputCodec = aggregate.op === 'sum' && field.type.kind === 'integer'
+      ? { kind: 'aggregateInteger' }
+      : field.type.kind === 'decimal' && aggregate.op === 'sum'
+        ? field.type
+        : {
+            kind: 'aggregateDecimal',
+            ...(field.type.kind === 'decimal' && field.type.scale !== undefined
+              ? { scale: Math.max(field.type.scale, 9) }
+              : { scale: 9 }),
+          };
     return { sql: `${aggregate.op.toUpperCase()}(${expression})${filter}`, codec, field };
   }
   if (field.type.kind === 'null') {
@@ -106,7 +139,7 @@ function ratioSql(
 ): string {
   const left = aggregateSql(context, numerator).sql;
   const right = aggregateSql(context, denominator).sql;
-  return `((${left})::numeric / NULLIF((${right})::numeric, 0::numeric))`;
+  return `ROUND(((${left})::numeric / NULLIF((${right})::numeric, 0::numeric)), 9)`;
 }
 
 function fieldForCodec(
@@ -199,20 +232,23 @@ function compileOutputs(
     outputs.push({ slot: dimension.output.slot, sql, codec: field.type, sourceField: field });
     groups.push(sql);
   }
-  for (const metric of plan.metrics) {
+  for (const [index, metric] of plan.metrics.entries()) {
     if (metric.kind === 'aggregate') {
       const compiled = aggregateSql(context, metric.aggregate);
+      const codec = compiled.codec.kind === 'aggregateMoney'
+        ? { ...compiled.codec, metricPath: `/metrics/${index}` }
+        : compiled.codec;
       outputs.push({
         slot: metric.output.slot,
         sql: compiled.sql,
-        codec: compiled.codec,
+        codec,
         ...(compiled.field === undefined ? {} : { sourceField: compiled.field }),
       });
     } else {
       outputs.push({
         slot: metric.output.slot,
         sql: ratioSql(context, metric.numerator, metric.denominator),
-        codec: { kind: 'aggregateDecimal' },
+        codec: { kind: 'aggregateDecimal', scale: 9 },
       });
     }
   }

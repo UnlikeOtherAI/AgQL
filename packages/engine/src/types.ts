@@ -28,6 +28,13 @@ export type EngineError = AgqlError & {
       readonly receipt: string;
       readonly require: readonly [string, ...string[]];
     };
+  } | {
+    readonly action: 'narrowEligibleSetOrRequestApproximate';
+    readonly details: {
+      readonly limit: SafeInteger;
+      readonly eligibleCount: SafeInteger;
+      readonly alternatives: readonly [string, ...string[]];
+    };
   };
 };
 

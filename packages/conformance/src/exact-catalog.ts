@@ -10,6 +10,7 @@ import type {
   RuntimeOwnedVector,
 } from '@agql/contracts';
 import type { EngineBinding, QualityCertification } from '@agql/engine';
+import type { CalendarPolicy } from '@agql/engine';
 import {
   CatalogDocumentSchema,
   CurrencyCodeSchema,
@@ -45,6 +46,7 @@ export interface ExactRuntimeInput {
   readonly scope: Scope;
   readonly binding: EngineBinding;
   readonly anchor: InstantValue;
+  readonly calendar: CalendarPolicy;
   readonly vector?: RuntimeOwnedVector;
   readonly qualityCertifications: readonly QualityCertification[];
 }
@@ -109,16 +111,36 @@ function mapField(value: JsonValue, location: string): readonly [string, FieldDo
     case 'decimal':
     case 'date':
     case 'null':
+      if (kind === 'decimal') {
+        const precision = source.precision;
+        const scale = source.scale;
+        if (precision === undefined && scale === undefined) return [id, { ...base, kind }];
+        return [id, {
+          ...base,
+          kind,
+          precision: numberMember(source, 'precision', location),
+          scale: numberMember(source, 'scale', location),
+        }];
+      }
       return [id, { ...base, kind }];
     case 'money': {
-      const currency = optionalString(source, 'currency', location);
-      if (currency === undefined) {
-        throw new TypeError(`${location} needs a fixed currency in the current catalog contract.`);
+      const precision = source.precision;
+      const scale = source.scale;
+      const currencies = source.currencies;
+      if (precision === undefined && scale === undefined && currencies === undefined) {
+        return [id, { ...base, kind }];
       }
       return [id, {
         ...base,
         kind,
-        currency: CurrencyCodeSchema.parse(currency),
+        precision: numberMember(source, 'precision', location),
+        scale: numberMember(source, 'scale', location),
+        currencies: arrayMember(source, 'currencies', location).map((currency, index) => {
+          if (typeof currency !== 'string') {
+            throw new TypeError(`${location}/currencies/${index} must be a string.`);
+          }
+          return CurrencyCodeSchema.parse(currency);
+        }),
       }];
     }
     case 'text':
@@ -366,6 +388,31 @@ function fixtureAnchor(fixture: ExactFixture): InstantValue {
   return InstantValueSchema.parse(value ?? '2000-01-01T00:00:00Z');
 }
 
+function fixtureCalendar(fixture: ExactFixture): CalendarPolicy {
+  const catalog = objectMember(fixture.value, 'catalog', fixture.sourcePath);
+  const calendar = optionalObject(catalog, 'calendar', '/catalog');
+  if (calendar === undefined) {
+    return {
+      timezone: 'UTC',
+      timezoneDatabase: 'fixed-offset',
+      weekStart: 'monday',
+      fiscalDayStart: '00:00:00',
+    };
+  }
+  const timezone = stringMember(calendar, 'timezone', '/catalog/calendar');
+  const database = optionalString(calendar, 'timezoneDatabase', '/catalog/calendar');
+  if (database !== undefined && database !== '2024a' && database !== 'fixed-offset') {
+    throw new TypeError('/catalog/calendar/timezoneDatabase must be 2024a or fixed-offset.');
+  }
+  return {
+    timezone,
+    timezoneDatabase: database ?? 'fixed-offset',
+    weekStart: (optionalString(calendar, 'weekStart', '/catalog/calendar') ?? 'monday') as
+      CalendarPolicy['weekStart'],
+    fiscalDayStart: optionalString(calendar, 'fiscalDayStart', '/catalog/calendar') ?? '00:00:00',
+  };
+}
+
 function qualityCertifications(
   fixture: ExactFixture,
   catalog: CatalogDocument,
@@ -401,6 +448,7 @@ export function mapExactRuntimeInput(
     scope: fixtureScope(fixture, catalog),
     binding: fixtureBinding(catalog),
     anchor: fixtureAnchor(fixture),
+    calendar: fixtureCalendar(fixture),
     ...(vector === undefined ? {} : { vector }),
     qualityCertifications: qualityCertifications(
       fixture,

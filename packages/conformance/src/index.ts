@@ -11,5 +11,8 @@ export * from './report.ts';
 export * from './retrieval.ts';
 export * from './security-expansion.ts';
 export * from './security-fixtures.ts';
+export * from './security-probe-driver.ts';
 export * from './security.ts';
 export * from './sqlite-exact-driver.ts';
+export * from './sqlite-security-driver.ts';
+export * from './postgres-security-driver.ts';

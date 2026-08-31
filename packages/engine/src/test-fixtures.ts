@@ -106,7 +106,9 @@ export const catalog = CatalogDocumentSchema.parse({
         'docs.amount': {
           description: 'Amount.',
           kind: 'money',
-          currency: 'USD',
+          precision: 38,
+          scale: 2,
+          currencies: ['USD'],
           nullable: false,
         },
       },

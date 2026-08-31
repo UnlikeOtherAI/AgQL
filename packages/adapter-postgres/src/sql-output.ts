@@ -28,7 +28,7 @@ export function selectedFieldSql(context: OutputContext, field: ResolvedFieldBin
 export function encodedOutputSql(expression: string, codec: OutputCodec): string {
   if (codec.kind === 'integer' || codec.kind === 'decimal' || codec.kind === 'money'
     || codec.kind === 'date' || codec.kind === 'rank' || codec.kind === 'aggregateInteger'
-    || codec.kind === 'aggregateDecimal') {
+    || codec.kind === 'aggregateDecimal' || codec.kind === 'aggregateMoney') {
     return `${expression}::text`;
   }
   if (codec.kind === 'instant') {
