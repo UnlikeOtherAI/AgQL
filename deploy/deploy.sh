@@ -142,10 +142,16 @@ function isRecord(value) {
 }
 
 void (async () => {
-  const appKey = process.env.AGQL_APP_KEYS?.split(',', 1)[0]?.trim();
-  if (appKey === undefined || appKey.length === 0) {
+  // Entries are key-id:secret; the bearer token is the secret alone.
+  const appKeyEntry = process.env.AGQL_APP_KEYS?.split(',', 1)[0]?.trim();
+  if (appKeyEntry === undefined || appKeyEntry.length === 0) {
     throw new Error('AGQL_APP_KEYS is unavailable in the API container.');
   }
+  const separator = appKeyEntry.indexOf(':');
+  if (separator <= 0 || separator === appKeyEntry.length - 1) {
+    throw new Error('AGQL_APP_KEYS entries must use key-id:secret.');
+  }
+  const appKey = appKeyEntry.slice(separator + 1);
   const protocolVersion = '2026-07-28';
   const request = {
     jsonrpc: '2.0',
