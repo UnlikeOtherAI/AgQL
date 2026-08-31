@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import type { AddressInfo } from 'node:net';
 
-import { CatalogDocumentSchema } from '@agql/schemas';
+import { CatalogDocumentSchema, validateIngestDocument } from '@agql/schemas';
 import {
   effectivePlanHash,
   executionFingerprint,
@@ -25,6 +26,7 @@ import {
   BearerKeyAuthenticator,
   ServerAgentAuthenticator,
   ServerApplication,
+  validateDeterministicCatalog,
 } from './index.ts';
 
 const allow = { effect: 'allow' as const, requiredCapabilities: [] };
@@ -84,7 +86,10 @@ const runtimeTimings = {
   fusionReleaseMs: 1,
 };
 
-function envelope(context: AgentRequestContext, input: QueryOperationInput): ResultEnvelope {
+function envelope(
+  context: AgentRequestContext,
+  input: QueryOperationInput,
+): ResultEnvelope & { readonly principalOnly: { readonly id: 'principal-secret' } } {
   const source = sourceQueryHash(input.query);
   const scope = fingerprintScope(context.scope);
   const effective = effectivePlanHash({
@@ -125,6 +130,7 @@ function envelope(context: AgentRequestContext, input: QueryOperationInput): Res
       anchor: context.requestAnchor,
       replayTier: 'exactReplay',
     },
+    principalOnly: { id: 'principal-secret' },
   };
 }
 
@@ -284,5 +290,34 @@ test('server listener protects MCP, HTTP, and principal channels', async () => {
     assert.equal(JSON.stringify(mcpPayload).includes('principal-secret'), false);
   } finally {
     await application.close();
+  }
+});
+
+test('starter catalog and seed records validate through catalog and ingest boundaries',
+  async () => {
+  const catalogPath = new URL('../../../examples/starter/catalog.json', import.meta.url);
+  const catalogValue = JSON.parse(await readFile(catalogPath, 'utf8')) as unknown;
+  const starter = CatalogDocumentSchema.parse(catalogValue);
+  validateDeterministicCatalog(starter);
+  const seedPath = new URL('../../../examples/starter/seed.jsonl', import.meta.url);
+  const seed = await readFile(seedPath, 'utf8');
+  const rows = seed.split('\n').filter((line) => line.length > 0).map((line) =>
+    JSON.parse(line) as Readonly<Record<string, unknown>>);
+  const grouped = new Map<string, readonly Readonly<Record<string, unknown>>[]>();
+  for (const row of rows) {
+    const dataset = row.dataset;
+    assert.equal(typeof dataset, 'string');
+    if (typeof dataset !== 'string') continue;
+    grouped.set(dataset, [...(grouped.get(dataset) ?? []), row]);
+  }
+  for (const [dataset, records] of grouped) {
+    const result = validateIngestDocument({
+      mode: 'insertOnly',
+      dataset,
+      idempotencyKey: `starter-seed-${dataset}-v1`,
+      embeddingPolicy: 'catalog',
+      records: records.map((record) => ({ id: record.id, value: record.value })),
+    });
+    assert.equal(result.ok, true);
   }
 });

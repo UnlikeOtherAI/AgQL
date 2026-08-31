@@ -81,7 +81,7 @@ export class JsonLogger implements StructuredLogger {
   }
 }
 
-function receiptSecret(keys: readonly string[]): Uint8Array {
+export function applicationSecret(keys: readonly string[]): Uint8Array {
   const hash = createHash('sha256');
   hash.update('agql-server-execution-receipts-v1\u0000', 'utf8');
   for (const key of keys) {
@@ -263,7 +263,7 @@ export class ServerApplication {
     const sourceId = options.sourceId ?? DEFAULT_SOURCE_ID;
     const catalog = new ScopedCatalogProfile([{ id: sourceId, catalog: options.catalog }]);
     const receipts = options.receiptCodec
-      ?? new HmacExecutionReceiptCodec(receiptSecret([options.catalog.catalogVersion]));
+      ?? new HmacExecutionReceiptCodec(applicationSecret([options.catalog.catalogVersion]));
     const savedQueries = new VerifiedSavedQueryStore(receipts, {
       identity(source) {
         return source === sourceId
@@ -396,9 +396,9 @@ export function createDeploymentServer(options: DeploymentServerOptions): Server
   validateDeterministicCatalog(options.catalog);
   const deployment = options.deployment ?? createPostgresDeployment(options.catalog, {
     databaseUrl: options.config.databaseUrl,
-    tokenSecret: receiptSecret(options.config.appKeys),
+    tokenSecret: applicationSecret(options.config.appKeys),
   });
-  const receiptCodec = new HmacExecutionReceiptCodec(receiptSecret(options.config.appKeys));
+  const receiptCodec = new HmacExecutionReceiptCodec(applicationSecret(options.config.appKeys));
   const runtime = new ServerRuntime({
     sourceId: DEFAULT_SOURCE_ID,
     catalog: options.catalog,

@@ -4,18 +4,16 @@
   "policyVersion": "starter-policy-v1",
   "datasets": {
     "projects": {
-      "description": "Small portfolio of active projects, including the owner, current stage, and a plain-language summary suitable for a quick operational briefing.",
+      "description": "A small portfolio of active projects, giving an agent the project name and a concise operational summary.",
       "idField": "id",
       "fields": {
-        "id": { "kind": "id", "description": "Stable project identifier used for deterministic ordering and references.", "nullable": false },
-        "name": { "kind": "text", "description": "Short human-readable project name.", "nullable": false, "collation": { "id": "unicode-codepoint-v0", "version": "15.1" } },
-        "owner": { "kind": "text", "description": "Team responsible for delivering the project.", "nullable": false, "collation": { "id": "unicode-codepoint-v0", "version": "15.1" } },
-        "stage": { "kind": "enum", "description": "Current delivery stage using stable workflow codes.", "nullable": false, "values": [{ "code": "active", "label": "Active" }, { "code": "planned", "label": "Planned" }, { "code": "paused", "label": "Paused" }] },
-        "summary": { "kind": "text", "description": "Concise description of the intended outcome, current focus, and any important operational context.", "nullable": false, "collation": { "id": "unicode-codepoint-v0", "version": "15.1" } }
+        "id": { "kind": "id", "description": "Stable project identifier for references and deterministic ordering.", "nullable": false },
+        "name": { "kind": "text", "description": "Short human-readable name of the project.", "nullable": false, "collation": { "id": "unicode-codepoint-v0", "version": "15.1" } },
+        "summary": { "kind": "text", "description": "Concise project outcome and current operational context.", "nullable": false, "collation": { "id": "unicode-codepoint-v0", "version": "15.1" } }
       },
-      "profiles": ["records.v0", "aggregate.v0", "retrieve.semantic.v0", "ingest.canonical.v0"],
+      "profiles": ["records.v0", "retrieve.semantic.v0", "ingest.canonical.v0"],
       "embeddings": { "summary_search": "project-summary@1" },
-      "rowScope": { "kind": "none", "reason": "The starter catalog is intentionally an unpartitioned local demonstration dataset." },
+      "rowScope": { "kind": "none", "reason": "The starter catalog is an intentionally unpartitioned local demonstration." },
       "capabilityTags": ["portfolio", "starter"],
       "fieldPolicies": {
         "id": {
@@ -34,22 +32,6 @@
           "aggregate": { "count": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "countDistinct": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "sum": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "avg": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "min": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "max": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } } },
           "lexicalSearch": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }
         },
-        "owner": {
-          "select": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
-          "filter": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
-          "group": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
-          "order": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
-          "aggregate": { "count": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "countDistinct": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "sum": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "avg": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "min": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "max": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } } },
-          "lexicalSearch": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }
-        },
-        "stage": {
-          "select": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
-          "filter": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
-          "group": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
-          "order": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
-          "aggregate": { "count": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "countDistinct": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "sum": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "avg": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "min": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "max": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } } },
-          "lexicalSearch": { "model": { "effect": "deny" }, "principal": { "effect": "deny" } }
-        },
         "summary": {
           "select": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
           "filter": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } },
@@ -62,19 +44,16 @@
       "embeddingPolicies": {}
     },
     "tasks": {
-      "description": "Compact delivery task register linking concrete work items to projects, owners, due dates, and their current delivery status.",
+      "description": "A compact task register that connects concrete delivery work to the project it supports.",
       "idField": "id",
       "fields": {
-        "id": { "kind": "id", "description": "Stable task identifier used for deterministic ordering and references.", "nullable": false },
-        "projectId": { "kind": "id", "description": "Stable identifier of the project this task supports.", "nullable": false },
-        "title": { "kind": "text", "description": "Brief actionable description of the work item.", "nullable": false, "collation": { "id": "unicode-codepoint-v0", "version": "15.1" } },
-        "owner": { "kind": "text", "description": "Team currently accountable for completing the task.", "nullable": false, "collation": { "id": "unicode-codepoint-v0", "version": "15.1" } },
-        "status": { "kind": "enum", "description": "Current execution status using stable task workflow codes.", "nullable": false, "values": [{ "code": "blocked", "label": "Blocked" }, { "code": "done", "label": "Done" }, { "code": "in_progress", "label": "In progress" }, { "code": "todo", "label": "To do" }] },
-        "dueDate": { "kind": "date", "description": "Planned completion date for the task.", "nullable": true }
+        "id": { "kind": "id", "description": "Stable task identifier for references and deterministic ordering.", "nullable": false },
+        "projectId": { "kind": "id", "description": "Stable identifier of the project that this task supports.", "nullable": false },
+        "title": { "kind": "text", "description": "Brief actionable description of the delivery work.", "nullable": false, "collation": { "id": "unicode-codepoint-v0", "version": "15.1" } }
       },
-      "profiles": ["records.v0", "aggregate.v0", "ingest.canonical.v0"],
+      "profiles": ["records.v0", "ingest.canonical.v0"],
       "embeddings": {},
-      "rowScope": { "kind": "none", "reason": "The starter catalog is intentionally an unpartitioned local demonstration dataset." },
+      "rowScope": { "kind": "none", "reason": "The starter catalog is an intentionally unpartitioned local demonstration." },
       "capabilityTags": ["portfolio", "starter", "work-items"],
       "fieldPolicies": {
         "id": {
@@ -85,15 +64,6 @@
         },
         "title": {
           "select": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "filter": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "group": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "order": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "aggregate": { "count": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "countDistinct": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "sum": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "avg": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "min": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "max": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } } }, "lexicalSearch": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }
-        },
-        "owner": {
-          "select": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "filter": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "group": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "order": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "aggregate": { "count": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "countDistinct": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "sum": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "avg": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "min": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "max": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } } }, "lexicalSearch": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }
-        },
-        "status": {
-          "select": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "filter": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "group": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "order": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "aggregate": { "count": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "countDistinct": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "sum": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "avg": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "min": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "max": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } } }, "lexicalSearch": { "model": { "effect": "deny" }, "principal": { "effect": "deny" } }
-        },
-        "dueDate": {
-          "select": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "filter": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "group": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "order": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "aggregate": { "count": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "countDistinct": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "sum": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "avg": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "min": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } }, "max": { "model": { "effect": "allow", "requiredCapabilities": [] }, "principal": { "effect": "allow", "requiredCapabilities": [] } } }, "lexicalSearch": { "model": { "effect": "deny" }, "principal": { "effect": "deny" } }
         }
       },
       "embeddingPolicies": {}
@@ -104,7 +74,7 @@
       "version": "1",
       "sourceFields": ["summary"],
       "inputTransformId": "deterministic-join-nfc-v1",
-      "model": { "id": "deterministic-local-nonsemantic", "revision": "provider:deterministic-local-nonsemantic-v1" },
+      "model": { "id": "deterministic-local-nonsemantic", "revision": "provider:deterministic-local-nonsemantic-4f2a9c7b" },
       "dimension": 16,
       "metric": "cosine",
       "vectorEncoding": "float32",

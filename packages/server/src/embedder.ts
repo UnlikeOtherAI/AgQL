@@ -18,7 +18,7 @@ import type {
 } from '@agql/schemas';
 
 export const DETERMINISTIC_MODEL_ID = 'deterministic-local-nonsemantic';
-export const DETERMINISTIC_MODEL_REVISION = 'provider:deterministic-local-nonsemantic-v1';
+export const DETERMINISTIC_MODEL_REVISION = 'provider:deterministic-local-nonsemantic-4f2a9c7b';
 export const DETERMINISTIC_INPUT_TRANSFORM = 'deterministic-join-nfc-v1';
 
 function digest(value: Uint8Array): QueryVectorDigest {

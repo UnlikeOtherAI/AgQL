@@ -16,6 +16,7 @@ import {
 } from './config.ts';
 import { DeterministicEmbedderRegistry, validateDeterministicCatalog } from './embedder.ts';
 import { ServerRuntime } from './runtime.ts';
+import { applicationSecret } from './service.ts';
 
 interface SeedRecord {
   readonly dataset: string;
@@ -79,7 +80,7 @@ async function main(): Promise<void> {
   validateDeterministicCatalog(catalog);
   const deployment = createPostgresDeployment(catalog, {
     databaseUrl: config.databaseUrl,
-    tokenSecret: new TextEncoder().encode(config.appKeys.join('\u0000').padEnd(32, '0')),
+    tokenSecret: applicationSecret(config.appKeys),
   });
   try {
     await deployment.provision();
@@ -89,9 +90,7 @@ async function main(): Promise<void> {
       binding: deployment.binding,
       adapter: deployment.adapter,
       embedders: new DeterministicEmbedderRegistry(),
-      receiptCodec: new HmacExecutionReceiptCodec(
-        new TextEncoder().encode(config.appKeys.join('\u0000').padEnd(32, '0')),
-      ),
+      receiptCodec: new HmacExecutionReceiptCodec(applicationSecret(config.appKeys)),
     });
     const scope = ScopeSchema.parse({
       principal: 'agql:starter-seed',
