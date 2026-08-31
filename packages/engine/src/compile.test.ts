@@ -66,9 +66,12 @@ test('hidden and nonexistent references have byte-identical refusal shapes', () 
   assert.equal(canonicalizeJcs(hiddenError), canonicalizeJcs(missingError));
   assert.deepEqual(hiddenError, {
     code: 'REFERENCE_NOT_AVAILABLE',
-    message: 'The referenced item is not available in the effective catalog.',
+    message: 'The referenced catalog item is not available in this scope.',
     path: '/select/0',
-    alternatives: [],
+    alternatives: [
+      'docs.amount', 'docs.body', 'docs.created', 'docs.id', 'docs.qty', 'docs.tenant',
+      'docs.title',
+    ],
   });
 });
 

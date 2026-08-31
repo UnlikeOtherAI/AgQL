@@ -193,7 +193,7 @@ export function compileQuery(input: CompileQueryInput): EngineResult<CompileOutp
   const dataset = catalog.value.datasets[validated.value.document.from];
   const binding = input.binding.datasets[validated.value.document.from];
   if (dataset === undefined || binding === undefined) {
-    return fail(unavailableReference('/from'));
+    return fail(unavailableReference('/from', Object.keys(catalog.value.datasets).sort()));
   }
   const scopeFingerprint = fingerprintScope(scope.data);
   const planHash = effectivePlanHash({

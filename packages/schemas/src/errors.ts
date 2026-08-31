@@ -55,7 +55,7 @@ export interface AgqlErrorBase<C extends ErrorCode> {
  */
 export interface ReferenceNotAvailableError
   extends Omit<AgqlErrorBase<'REFERENCE_NOT_AVAILABLE'>, 'alternatives'> {
-  readonly alternatives: readonly [];
+  readonly alternatives: readonly string[];
 }
 
 export type AgqlError =
@@ -116,11 +116,14 @@ export function errorResult(error: AgqlError): ErrorResult {
   return { ok: false, errors: [error] };
 }
 
-export function referenceNotAvailable(path: string): ReferenceNotAvailableError {
+export function referenceNotAvailable(
+  path: string,
+  alternatives: readonly string[] = [],
+): ReferenceNotAvailableError {
   return {
     code: 'REFERENCE_NOT_AVAILABLE',
-    message: 'The referenced item is not available in the effective catalog.',
+    message: 'The referenced catalog item is not available in this scope.',
     path,
-    alternatives: [],
+    alternatives,
   };
 }
