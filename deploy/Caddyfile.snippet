@@ -1,6 +1,7 @@
 # Replace agql.example.com with the public hostname served by this Caddy instance.
 agql.example.com {
 	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 
 	reverse_proxy agql-api:8787 {
 		header_up Host {host}
