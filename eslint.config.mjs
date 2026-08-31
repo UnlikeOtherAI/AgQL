@@ -6,6 +6,7 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
+      '.worktrees/**',
       'conformance/**',
       'eslint.config.mjs',
     ],
