@@ -1,0 +1,770 @@
+{
+  "format": "agql-retrieval-fixture/0.1",
+  "id": "retrieval.filter-sparse-intersection",
+  "rfc": [
+    "§5",
+    "§6",
+    "§9",
+    "§11"
+  ],
+  "rule": "A sparse conjunction has an exact eligible set and is never padded with near but ineligible neighbours.",
+  "corpus": {
+    "path": "corpora/deterministic-v1-seed-a6c1e57d.json",
+    "sha256": "sha256:a48cb8ecc3cab3e37b1bed7cc60b4cca80df0aeebdfecac150449f268c5f54aa"
+  },
+  "catalog": {
+    "dataset": "retrieval_items",
+    "idField": "retrieval_items.id",
+    "embeddingSpec": "fixture-body@1",
+    "fields": [
+      "retrieval_items.id",
+      "retrieval_items.tenant",
+      "retrieval_items.topic",
+      "retrieval_items.filter50",
+      "retrieval_items.filter10",
+      "retrieval_items.filter1",
+      "retrieval_items.sparseA",
+      "retrieval_items.sparseB",
+      "retrieval_items.text"
+    ]
+  },
+  "scope": {
+    "principal": "fixture:retrieval-reader",
+    "partitions": {
+      "retrieval_items.tenant": [
+        "t00",
+        "t01",
+        "t02",
+        "t03",
+        "t04",
+        "t05",
+        "t06",
+        "t07",
+        "t08",
+        "t09",
+        "t10",
+        "t11",
+        "t12",
+        "t13",
+        "t14",
+        "t15"
+      ]
+    },
+    "capabilities": [
+      "retrieve.semantic.v0",
+      "semanticSearch:fixture-body@1"
+    ]
+  },
+  "family": {
+    "selectivityClass": "sparse-independent-intersection",
+    "predicate": {
+      "kind": "and",
+      "items": [
+        {
+          "kind": "predicate",
+          "field": "retrieval_items.sparseA",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "kind": "predicate",
+          "field": "retrieval_items.sparseB",
+          "op": "eq",
+          "value": true
+        }
+      ]
+    },
+    "queryIds": [
+      "q000",
+      "q001",
+      "q002",
+      "q003",
+      "q004",
+      "q005",
+      "q006",
+      "q007",
+      "q008",
+      "q009",
+      "q010",
+      "q011",
+      "q012",
+      "q013",
+      "q014",
+      "q015",
+      "q016",
+      "q017",
+      "q018",
+      "q019",
+      "q020",
+      "q021",
+      "q022",
+      "q023",
+      "q024",
+      "q025",
+      "q026",
+      "q027",
+      "q028",
+      "q029",
+      "q030",
+      "q031",
+      "q032",
+      "q033",
+      "q034",
+      "q035",
+      "q036",
+      "q037",
+      "q038",
+      "q039",
+      "q040",
+      "q041",
+      "q042",
+      "q043",
+      "q044",
+      "q045",
+      "q046",
+      "q047",
+      "q048",
+      "q049",
+      "q050",
+      "q051",
+      "q052",
+      "q053",
+      "q054",
+      "q055",
+      "q056",
+      "q057",
+      "q058",
+      "q059",
+      "q060",
+      "q061",
+      "q062",
+      "q063"
+    ],
+    "take": 10,
+    "accuracy": "approximate",
+    "qualityProfile": "baseline-unset-v0"
+  },
+  "queryTemplate": {
+    "version": "0",
+    "mode": "retrieve",
+    "from": "retrieval_items",
+    "select": [
+      "retrieval_items.id"
+    ],
+    "search": {
+      "kind": "semantic",
+      "using": "fixture-body@1",
+      "textFromCorpusQuery": true,
+      "accuracy": "approximate",
+      "quality": "baseline-unset-v0"
+    },
+    "where": {
+      "kind": "and",
+      "items": [
+        {
+          "kind": "predicate",
+          "field": "retrieval_items.sparseA",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "kind": "predicate",
+          "field": "retrieval_items.sparseB",
+          "op": "eq",
+          "value": true
+        }
+      ]
+    },
+    "take": 10
+  },
+  "oracle": {
+    "eligibleCount": 4,
+    "eligibleIds": [
+      "r0157",
+      "r0358",
+      "r0529",
+      "r0708"
+    ],
+    "exactMetric": "dot-product-descending-int-v1",
+    "exactTieBreak": "stable id ascending",
+    "exactTopKByQuery": [
+      {
+        "queryId": "q000",
+        "ids": [
+          "r0708",
+          "r0157",
+          "r0358",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q001",
+        "ids": [
+          "r0708",
+          "r0529",
+          "r0157",
+          "r0358"
+        ]
+      },
+      {
+        "queryId": "q002",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q003",
+        "ids": [
+          "r0529",
+          "r0157",
+          "r0358",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q004",
+        "ids": [
+          "r0529",
+          "r0708",
+          "r0358",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q005",
+        "ids": [
+          "r0358",
+          "r0157",
+          "r0529",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q006",
+        "ids": [
+          "r0708",
+          "r0358",
+          "r0529",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q007",
+        "ids": [
+          "r0157",
+          "r0708",
+          "r0529",
+          "r0358"
+        ]
+      },
+      {
+        "queryId": "q008",
+        "ids": [
+          "r0708",
+          "r0157",
+          "r0358",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q009",
+        "ids": [
+          "r0157",
+          "r0358",
+          "r0529",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q010",
+        "ids": [
+          "r0157",
+          "r0529",
+          "r0358",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q011",
+        "ids": [
+          "r0157",
+          "r0708",
+          "r0358",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q012",
+        "ids": [
+          "r0358",
+          "r0157",
+          "r0529",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q013",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q014",
+        "ids": [
+          "r0358",
+          "r0157",
+          "r0708",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q015",
+        "ids": [
+          "r0157",
+          "r0358",
+          "r0708",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q016",
+        "ids": [
+          "r0157",
+          "r0708",
+          "r0358",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q017",
+        "ids": [
+          "r0157",
+          "r0358",
+          "r0708",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q018",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q019",
+        "ids": [
+          "r0358",
+          "r0529",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q020",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q021",
+        "ids": [
+          "r0529",
+          "r0157",
+          "r0358",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q022",
+        "ids": [
+          "r0708",
+          "r0157",
+          "r0529",
+          "r0358"
+        ]
+      },
+      {
+        "queryId": "q023",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q024",
+        "ids": [
+          "r0529",
+          "r0708",
+          "r0358",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q025",
+        "ids": [
+          "r0358",
+          "r0529",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q026",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q027",
+        "ids": [
+          "r0157",
+          "r0358",
+          "r0708",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q028",
+        "ids": [
+          "r0358",
+          "r0529",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q029",
+        "ids": [
+          "r0358",
+          "r0708",
+          "r0529",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q030",
+        "ids": [
+          "r0157",
+          "r0358",
+          "r0529",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q031",
+        "ids": [
+          "r0708",
+          "r0529",
+          "r0358",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q032",
+        "ids": [
+          "r0157",
+          "r0708",
+          "r0529",
+          "r0358"
+        ]
+      },
+      {
+        "queryId": "q033",
+        "ids": [
+          "r0157",
+          "r0529",
+          "r0358",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q034",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q035",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q036",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q037",
+        "ids": [
+          "r0529",
+          "r0157",
+          "r0708",
+          "r0358"
+        ]
+      },
+      {
+        "queryId": "q038",
+        "ids": [
+          "r0529",
+          "r0157",
+          "r0358",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q039",
+        "ids": [
+          "r0358",
+          "r0157",
+          "r0529",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q040",
+        "ids": [
+          "r0708",
+          "r0157",
+          "r0358",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q041",
+        "ids": [
+          "r0157",
+          "r0708",
+          "r0358",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q042",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q043",
+        "ids": [
+          "r0708",
+          "r0358",
+          "r0157",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q044",
+        "ids": [
+          "r0157",
+          "r0529",
+          "r0358",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q045",
+        "ids": [
+          "r0358",
+          "r0529",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q046",
+        "ids": [
+          "r0358",
+          "r0157",
+          "r0708",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q047",
+        "ids": [
+          "r0708",
+          "r0157",
+          "r0358",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q048",
+        "ids": [
+          "r0157",
+          "r0529",
+          "r0358",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q049",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q050",
+        "ids": [
+          "r0358",
+          "r0529",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q051",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q052",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0708",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q053",
+        "ids": [
+          "r0529",
+          "r0358",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q054",
+        "ids": [
+          "r0157",
+          "r0358",
+          "r0529",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q055",
+        "ids": [
+          "r0708",
+          "r0529",
+          "r0157",
+          "r0358"
+        ]
+      },
+      {
+        "queryId": "q056",
+        "ids": [
+          "r0157",
+          "r0708",
+          "r0358",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q057",
+        "ids": [
+          "r0358",
+          "r0529",
+          "r0157",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q058",
+        "ids": [
+          "r0358",
+          "r0708",
+          "r0157",
+          "r0529"
+        ]
+      },
+      {
+        "queryId": "q059",
+        "ids": [
+          "r0529",
+          "r0157",
+          "r0358",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q060",
+        "ids": [
+          "r0358",
+          "r0708",
+          "r0529",
+          "r0157"
+        ]
+      },
+      {
+        "queryId": "q061",
+        "ids": [
+          "r0708",
+          "r0157",
+          "r0529",
+          "r0358"
+        ]
+      },
+      {
+        "queryId": "q062",
+        "ids": [
+          "r0157",
+          "r0358",
+          "r0529",
+          "r0708"
+        ]
+      },
+      {
+        "queryId": "q063",
+        "ids": [
+          "r0358",
+          "r0529",
+          "r0157",
+          "r0708"
+        ]
+      }
+    ]
+  },
+  "invariant": "Every returned id is in eligibleIds; no duplicate or padding id is permitted. Recall is measured only after this zero-tolerance invariant passes."
+}

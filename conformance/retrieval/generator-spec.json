@@ -1,0 +1,57 @@
+{
+  "format": "agql-retrieval-generator-spec/1",
+  "id": "xorshift32-filter-corpus-v1",
+  "rule": "An independent implementation can reproduce the corpus and its bytes from this specification without clocks, locale, native word order, or unpinned randomness.",
+  "rfc": ["§3", "§5", "§11"],
+  "prng": {
+    "name": "xorshift32",
+    "version": 1,
+    "stateBits": 32,
+    "seedHex": "a6c1e57d",
+    "seedDecimal": 2797725053,
+    "seedMustBeNonZero": true,
+    "steps": [
+      {"operation": "xor-left-shift", "bits": 13, "reduceUnsigned32After": true},
+      {"operation": "xor-logical-right-shift", "bits": 17, "reduceUnsigned32After": true},
+      {"operation": "xor-left-shift", "bits": 5, "reduceUnsigned32After": true}
+    ],
+    "return": "new unsigned 32-bit state"
+  },
+  "records": {
+    "count": 1024,
+    "id": {"prefix": "r", "zeroPaddedDecimalWidth": 4},
+    "drawOrderPerRecord": ["selector50", "selector10", "selector1", "selectorSparseA", "selectorSparseB", "tenant", "topic", "vector[0]", "vector[1]", "vector[2]", "vector[3]", "vector[4]", "vector[5]", "vector[6]", "vector[7]"],
+    "tenant": {"expression": "word % 16", "prefix": "t", "zeroPaddedDecimalWidth": 2},
+    "topic": {"expression": "word % 8", "prefix": "topic"},
+    "vector": {"dimension": 8, "componentExpression": "(word % 2001) - 1000", "minimum": -1000, "maximum": 1000},
+    "filters": {
+      "filter50": {"sortBy": ["selector50 ascending", "id ascending"], "take": 512},
+      "filter10": {"sortBy": ["selector10 ascending", "id ascending"], "take": 102},
+      "filter1": {"sortBy": ["selector1 ascending", "id ascending"], "take": 10},
+      "sparseA": {"sortBy": ["selectorSparseA ascending", "id ascending"], "take": 64},
+      "sparseB": {"sortBy": ["selectorSparseB ascending", "id ascending"], "take": 64}
+    },
+    "emittedPropertyOrder": ["id", "tenant", "topic", "filter50", "filter10", "filter1", "sparseA", "sparseB", "text", "vector"]
+  },
+  "queries": {
+    "count": 64,
+    "id": {"prefix": "q", "zeroPaddedDecimalWidth": 3},
+    "drawOrderPerQuery": ["vector[0]", "vector[1]", "vector[2]", "vector[3]", "vector[4]", "vector[5]", "vector[6]", "vector[7]"],
+    "vector": {"dimension": 8, "componentExpression": "(word % 2001) - 1000"},
+    "emittedPropertyOrder": ["id", "text", "vector"]
+  },
+  "oracle": {"metric": "dot-product-descending-int-v1", "tieBreak": "stable id ascending", "k": 10},
+  "serialization": {
+    "encoding": "UTF-8",
+    "byteOrderMark": false,
+    "jsonIndentAsciiSpaces": 2,
+    "lineEnding": "LF",
+    "finalLineFeed": true,
+    "topLevelPropertyOrder": ["format", "generator", "embedding", "records", "queries"]
+  },
+  "outputs": {
+    "corpus": "corpora/deterministic-v1-seed-a6c1e57d.json",
+    "manifest": "manifest.json",
+    "fixtures": ["fixtures/filter-50.json", "fixtures/filter-10.json", "fixtures/filter-1.json", "fixtures/sparse-intersection.json"]
+  }
+}
