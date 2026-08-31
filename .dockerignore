@@ -1,0 +1,11 @@
+.git
+.worktrees
+node_modules
+**/node_modules
+logs
+**/logs
+*.log
+.env
+.env.*
+**/.env
+**/.env.*
