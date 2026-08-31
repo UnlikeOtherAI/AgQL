@@ -20,14 +20,12 @@ import {
   unavailableRetrievalExecutor,
 } from './retrieval.ts';
 import type { RetrievalMeasurement } from './retrieval.ts';
-import {
-  blockedSecurityExecutor,
-  runSecuritySuite,
-} from './security.ts';
+import { runSecuritySuite } from './security.ts';
 import type { SecurityReplay, SecurityTier } from './security.ts';
 import { createSqliteExactDriver } from './sqlite-exact-driver.ts';
 import { createPostgresExactDriver } from './postgres-exact-driver.ts';
 import { runReceiptSuite } from './receipts.ts';
+import { createSqliteSecurityProbeExecutor } from './sqlite-security-driver.ts';
 
 type SuiteName = 'encoding' | 'exact' | 'security' | 'retrieval' | 'portability' | 'receipts';
 type AdapterSelection = 'sqlite' | 'postgres' | 'both';
@@ -201,7 +199,7 @@ async function run(options: CliOptions): Promise<number> {
     }
   }
   if (options.suites.has('security')) {
-    suites.push(await runSecuritySuite(corpusRoot, blockedSecurityExecutor(), {
+    suites.push(await runSecuritySuite(corpusRoot, createSqliteSecurityProbeExecutor(), {
       tier: options.tier,
       ...(options.replay === undefined ? {} : { replay: options.replay }),
     }));
