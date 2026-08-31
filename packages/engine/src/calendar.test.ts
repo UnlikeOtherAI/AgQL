@@ -31,7 +31,7 @@ test('inLast is a half-open calendar subtraction capped at the explicit anchor',
   ));
   if (range.kind !== 'instantRange') assert.fail('Expected instant range.');
   assert.equal(range.startInclusive, '2024-02-29T12:00:00.000Z');
-  assert.equal(range.endExclusive, anchor);
+  assert.equal(range.endExclusive, '2024-03-31T12:00:00.001Z');
   assert.equal(range.anchor, anchor);
 });
 

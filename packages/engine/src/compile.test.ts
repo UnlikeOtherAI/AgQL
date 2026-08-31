@@ -126,12 +126,14 @@ test('aggregate plans resolve ids, filters, ratio null semantics, and dimension 
     from: 'docs',
     dimensions: [{ kind: 'field', field: 'docs.tenant', id: 'tenant' }],
     metrics: [
-      { kind: 'aggregate', op: 'sum', field: 'docs.amount', id: 'total' },
+      { op: 'sum', field: 'docs.amount', id: 'total' },
+      { op: 'count', id: 'count' },
+      { op: 'sum', field: 'docs.qty', id: 'quantity' },
       {
-        kind: 'ratio',
+        op: 'ratio',
         id: 'ratio',
-        numerator: { kind: 'aggregate', op: 'count' },
-        denominator: { kind: 'aggregate', op: 'sum', field: 'docs.qty' },
+        numerator: 'count',
+        denominator: 'quantity',
       },
     ],
     having: { kind: 'predicate', field: 'total', op: 'gt', value: {
@@ -144,8 +146,8 @@ test('aggregate plans resolve ids, filters, ratio null semantics, and dimension 
   assert.equal(result.plan.mode, 'aggregate');
   if (result.plan.mode !== 'aggregate') assert.fail('Expected aggregate plan.');
   assert.equal(result.plan.tieBreak.kind, 'dimensionTuple');
-  assert.equal(result.plan.metrics[1]?.kind, 'ratio');
-  const ratio = result.plan.metrics[1];
+  assert.equal(result.plan.metrics[3]?.kind, 'ratio');
+  const ratio = result.plan.metrics[3];
   if (ratio?.kind !== 'ratio') assert.fail('Expected ratio metric.');
   assert.equal(ratio.divideByZero, 'null');
   const having = result.plan.having;
@@ -160,11 +162,11 @@ test('prototype-style aggregate aliases and output collisions are refused', () =
     mode: 'aggregate',
     from: 'docs',
     dimensions: [],
-    metrics: [{ kind: 'aggregate', op: 'count', id: '__proto__' }],
+    metrics: [{ op: 'count', id: '__proto__' }],
     order: [{ by: '__proto__', dir: 'asc' }],
     take: 1,
   }));
-  assert.equal(firstError(result)?.code, 'SEMANTIC_INVALID');
+  assert.equal(firstError(result)?.code, 'OUTPUT_ID_INVALID');
   assert.equal(firstError(result)?.path, '/metrics/0/id');
 });
 
@@ -278,7 +280,7 @@ test('field policy is enforced independently for every operation surface', () =>
       mode: 'aggregate',
       from: 'docs',
       dimensions: [{ kind: 'field', field: 'docs.secret', id: 'secret' }],
-      metrics: [{ kind: 'aggregate', op: 'count', id: 'count' }],
+      metrics: [{ op: 'count', id: 'count' }],
       order: [{ by: 'count', dir: 'asc' }],
       take: 1,
     },
@@ -288,7 +290,6 @@ test('field policy is enforced independently for every operation surface', () =>
       from: 'docs',
       dimensions: [],
       metrics: [{
-        kind: 'aggregate',
         op: 'countDistinct',
         field: 'docs.secret',
         id: 'secretCount',

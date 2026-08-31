@@ -25,7 +25,7 @@ test('unavailable references cannot carry hidden-name alternatives', () => {
   });
 });
 
-test('deferred constructs refuse with UNSUPPORTED after all structural errors', () => {
+test('reserved deferred constructs take their normative refusal path', () => {
   const result = validateQueryDocument({
     version: '1',
     mode: 'records',
@@ -37,9 +37,8 @@ test('deferred constructs refuse with UNSUPPORTED after all structural errors', 
   });
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.equal(result.errors[0].code, 'STRUCTURAL_INVALID');
-  assert.equal(result.errors.at(-1)?.code, 'UNSUPPORTED_IN_V0');
-  assert.equal(result.errors.at(-1)?.path, '/join');
+  assert.equal(result.errors[0].code, 'UNSUPPORTED_IN_V0');
+  assert.equal(result.errors[0].path, '/join');
 });
 
 test('a deferred construct in an otherwise valid query has one typed refusal', () => {

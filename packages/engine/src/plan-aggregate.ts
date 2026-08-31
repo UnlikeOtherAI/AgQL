@@ -26,9 +26,7 @@ import type { EngineResult } from './types.ts';
 import { typeLiteral } from './values.ts';
 
 type AggregateMetric = AggregateQuery['metrics'][number];
-type AggregateExpression =
-  | Extract<AggregateMetric, { readonly kind: 'aggregate' }>
-  | Extract<AggregateMetric, { readonly kind: 'ratio' }>['numerator'];
+type AggregateExpression = Exclude<AggregateMetric, { readonly op: 'ratio' }>;
 
 interface ExpressionOutput {
   readonly expression: ResolvedAggregateExpression;
@@ -45,6 +43,7 @@ interface OutputMeta {
   readonly orderFields: readonly string[];
   readonly shape: ResultSchemaField;
   readonly metric: boolean;
+  readonly expression?: ResolvedAggregateExpression;
 }
 
 function aggregateTypeAllowed(op: AggregateExpression['op'], type: ResolvedValueType): boolean {
@@ -217,12 +216,21 @@ export function buildAggregatePlan(
   const resultShape: ResultSchemaField[] = [];
   for (const [index, dimension] of query.dimensions.entries()) {
     const reserved = ['__proto__', 'prototype', 'constructor'].includes(dimension.id);
-    if (outputs.has(dimension.id) || reserved) {
-      return fail(semanticError(
-        'Aggregate output ids must be unique and prototype-safe.',
-        `/dimensions/${index}/id`,
-        ['Use a unique ordinary output id.'],
-      ));
+    if (reserved) {
+      return fail({
+        code: 'OUTPUT_ID_INVALID',
+        message: 'The output id does not use the AgQL v0 safe identifier grammar.',
+        path: `/dimensions/${index}/id`,
+        alternatives: ['Choose an id matching [A-Za-z][A-Za-z0-9_]{0,63} and not reserved by v0.'],
+      });
+    }
+    if (outputs.has(dimension.id)) {
+      return fail({
+        code: 'OUTPUT_ID_COLLISION',
+        message: 'The output id is already used by another dimension or metric.',
+        path: `/dimensions/${index}/id`,
+        alternatives: ['Choose a unique output id matching [A-Za-z][A-Za-z0-9_]{0,63}.'],
+      });
     }
     const field = authorizedField(context, dimension.field, 'group', `/dimensions/${index}/field`);
     if (!field.ok) return field;
@@ -290,43 +298,55 @@ export function buildAggregatePlan(
   const metrics: ResolvedMetric[] = [];
   for (const [index, metric] of query.metrics.entries()) {
     const slot = (query.dimensions.length + index) as SafeInteger;
-    if (outputs.has(metric.id) || ['__proto__', 'prototype', 'constructor'].includes(metric.id)) {
-      return fail(semanticError(
-        'Aggregate output ids must be unique and prototype-safe.',
-        `/metrics/${index}/id`,
-        ['Use a unique ordinary output id.'],
-      ));
+    if (['__proto__', 'prototype', 'constructor'].includes(metric.id)) {
+      return fail({
+        code: 'OUTPUT_ID_INVALID',
+        message: 'The output id does not use the AgQL v0 safe identifier grammar.',
+        path: `/metrics/${index}/id`,
+        alternatives: ['Choose an id matching [A-Za-z][A-Za-z0-9_]{0,63} and not reserved by v0.'],
+      });
+    }
+    if (outputs.has(metric.id)) {
+      return fail({
+        code: 'OUTPUT_ID_COLLISION',
+        message: 'The output id is already used by another dimension or metric.',
+        path: `/metrics/${index}/id`,
+        alternatives: ['Choose a unique output id matching [A-Za-z][A-Za-z0-9_]{0,63}.'],
+      });
     }
     const output = { logicalId: metric.id, slot };
-    if (metric.kind === 'aggregate') {
+    if (metric.op !== 'ratio') {
       const compiled = compileAggregateExpression(context, metric, `/metrics/${index}`, metric.id);
       if (!compiled.ok) return compiled;
       metrics.push({ kind: 'aggregate', output, aggregate: compiled.value.expression });
-      outputs.set(metric.id, { output, ...compiled.value, metric: true });
+      outputs.set(metric.id, {
+        output, ...compiled.value, metric: true, expression: compiled.value.expression,
+      });
       resultShape.push(compiled.value.shape);
     } else {
-      const numerator = compileAggregateExpression(
-        context,
-        metric.numerator,
-        `/metrics/${index}/numerator`,
-        metric.id,
-      );
-      if (!numerator.ok) return numerator;
-      const denominator = compileAggregateExpression(
-        context,
-        metric.denominator,
-        `/metrics/${index}/denominator`,
-        metric.id,
-      );
-      if (!denominator.ok) return denominator;
+      const numerator = outputs.get(metric.numerator);
+      if (numerator?.metric !== true || numerator.expression === undefined) {
+        return fail(semanticError(
+          'ratio numerator must reference an earlier aggregate metric.',
+          `/metrics/${index}/numerator`,
+          ['Reference an earlier count, countDistinct, sum, avg, min, or max metric.'],
+        ));
+      }
+      const denominator = outputs.get(metric.denominator);
+      if (denominator?.metric !== true || denominator.expression === undefined) {
+        return fail(semanticError(
+          'ratio denominator must reference an earlier aggregate metric.',
+          `/metrics/${index}/denominator`,
+          ['Reference an earlier count, countDistinct, sum, avg, min, or max metric.'],
+        ));
+      }
       const numericKinds = new Set(['integer', 'decimal', 'money']);
-      if (!numericKinds.has(numerator.value.type.kind)
-        || !numericKinds.has(denominator.value.type.kind)
-        || (numerator.value.type.kind === 'money'
-          && denominator.value.type.kind === 'money'
-          && numerator.value.type.currency !== denominator.value.type.currency)
-        || ((numerator.value.type.kind === 'money')
-          !== (denominator.value.type.kind === 'money'))) {
+      if (!numericKinds.has(numerator.type.kind)
+        || !numericKinds.has(denominator.type.kind)
+        || (numerator.type.kind === 'money'
+          && denominator.type.kind === 'money'
+          && numerator.type.currency !== denominator.type.currency)
+        || ((numerator.type.kind === 'money') !== (denominator.type.kind === 'money'))) {
         return fail(semanticError(
           'ratio requires compatible numeric aggregate operands.',
           `/metrics/${index}`,
@@ -336,8 +356,8 @@ export function buildAggregatePlan(
       metrics.push({
         kind: 'ratio',
         output,
-        numerator: numerator.value.expression,
-        denominator: denominator.value.expression,
+        numerator: numerator.expression,
+        denominator: denominator.expression,
         divideByZero: 'null',
       });
       const type: ResolvedValueType = { kind: 'decimal' };
@@ -346,7 +366,7 @@ export function buildAggregatePlan(
         output,
         type,
         nullable: true,
-        orderFields: [...numerator.value.orderFields, ...denominator.value.orderFields],
+        orderFields: [...numerator.orderFields, ...denominator.orderFields],
         shape,
         metric: true,
       });

@@ -285,7 +285,7 @@ test('aggregate result assembly releases calendar-period dimensions and their nu
       timezone: 'UTC',
       id: 'week',
     }],
-    metrics: [{ kind: 'aggregate', op: 'count', id: 'count' }],
+    metrics: [{ op: 'count', id: 'count' }],
     order: [{ by: 'week', dir: 'asc' }],
     take: 10,
   })));

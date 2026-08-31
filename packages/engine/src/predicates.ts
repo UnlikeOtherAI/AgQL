@@ -99,6 +99,7 @@ function compileLeaf(
         expression.unit,
         expression.amount,
         path,
+        context.input.calendar.timezone,
       );
     case 'inCurrent':
     case 'inPrevious':
@@ -109,6 +110,7 @@ function compileLeaf(
         expression.unit,
         undefined,
         path,
+        context.input.calendar.timezone,
       );
   }
 }

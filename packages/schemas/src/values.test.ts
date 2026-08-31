@@ -22,11 +22,16 @@ function decimal(value: string) {
   return parsed.data;
 }
 
-test('canonical decimal schema makes binary floats and alternate spellings impossible', () => {
+test('decimal boundaries reject binary floats and normalize textual spellings', () => {
   assert.equal(CanonicalDecimalSchema.safeParse(0.1).success, false);
-  for (const value of ['01', '+1', '1.0', '1e3', '-0', '.5']) {
+  for (const value of ['.5', '1e39']) {
     assert.equal(CanonicalDecimalSchema.safeParse(value).success, false, value);
   }
+  assert.equal(CanonicalDecimalSchema.parse('01'), '1');
+  assert.equal(CanonicalDecimalSchema.parse('+1'), '1');
+  assert.equal(CanonicalDecimalSchema.parse('1.0'), '1');
+  assert.equal(CanonicalDecimalSchema.parse('1e3'), '1000');
+  assert.equal(CanonicalDecimalSchema.parse('-0'), '0');
   for (const value of ['0', '-12', '12.34', '-0.001']) {
     assert.equal(CanonicalDecimalSchema.safeParse(value).success, true, value);
   }
@@ -55,7 +60,7 @@ test('decimal arithmetic never takes a JavaScript number value path', () => {
 
 test('money carries currency and cross-currency arithmetic is a typed refusal', () => {
   const gbp = MoneyValueSchema.safeParse({ amount: '12.50', currency: 'GBP' });
-  assert.equal(gbp.success, false, 'noncanonical amount is rejected');
+  assert.equal(gbp.success, true, 'money amount is normalized at the boundary');
   const left = MoneyValueSchema.parse({ amount: '12.5', currency: 'GBP' });
   const right = MoneyValueSchema.parse({ amount: '0.5', currency: 'GBP' });
   assert.deepEqual(addMoney(left, right), {
@@ -71,10 +76,10 @@ test('money carries currency and cross-currency arithmetic is a typed refusal', 
 
 test('text, dates, and instants enforce their canonical forms', () => {
   assert.equal(NormalizedTextSchema.safeParse('é').success, true);
-  assert.equal(NormalizedTextSchema.safeParse('e\u0301').success, false);
+  assert.equal(NormalizedTextSchema.safeParse('e\u0301').success, true);
+  assert.equal(NormalizedTextSchema.parse('e\u0301'), 'é');
   assert.equal(DateValueSchema.safeParse('2024-02-29').success, true);
   assert.equal(DateValueSchema.safeParse('2023-02-29').success, false);
   assert.equal(InstantValueSchema.safeParse('2024-02-29T23:59:59.123456789Z').success, true);
   assert.equal(InstantValueSchema.safeParse('2024-02-29T23:59:59+00:00').success, false);
 });
-

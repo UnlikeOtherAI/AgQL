@@ -38,12 +38,7 @@ function queryWhereExpressions(query: QueryDocument): readonly WhereExpression[]
   if (query.mode !== 'aggregate') return expressions;
   if (query.having !== undefined) expressions.push(query.having);
   for (const metric of query.metrics) {
-    if (metric.kind === 'aggregate') {
-      if (metric.filter !== undefined) expressions.push(metric.filter);
-    } else {
-      if (metric.numerator.filter !== undefined) expressions.push(metric.numerator.filter);
-      if (metric.denominator.filter !== undefined) expressions.push(metric.denominator.filter);
-    }
+    if (metric.op !== 'ratio' && metric.filter !== undefined) expressions.push(metric.filter);
   }
   return expressions;
 }

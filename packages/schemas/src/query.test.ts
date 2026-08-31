@@ -25,7 +25,7 @@ test('the three closed query modes accept their RFC v0 shapes', () => {
     mode: 'aggregate',
     from: 'orders',
     dimensions: [{ kind: 'field', field: 'orders.channel', id: 'channel' }],
-    metrics: [{ kind: 'aggregate', op: 'count', id: 'orders' }],
+    metrics: [{ op: 'count', id: 'orders' }],
     order: [{ by: 'channel', dir: 'asc' }],
     take: 10,
   }).success, true);

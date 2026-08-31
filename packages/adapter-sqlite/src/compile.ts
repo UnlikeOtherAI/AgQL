@@ -113,7 +113,7 @@ function recordsCompilation(
   plan: LogicalPlanForProfile<'records.v0'>,
   options: SqliteAdapterOptions,
 ): AdapterOutcome<CompiledRecordsQuery> {
-  if (plan.take >= plan.hardRowLimit) {
+  if (plan.take > plan.hardRowLimit) {
     return refusal(
       'COST_GATE_REFUSAL',
       'Records execution needs one bounded row beyond take to report truncation honestly.',

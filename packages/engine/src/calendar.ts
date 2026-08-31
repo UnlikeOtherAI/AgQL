@@ -68,6 +68,39 @@ function periodStart(anchor: Date, unit: CalendarUnit): Date {
   return day;
 }
 
+function zonedParts(
+  value: Date,
+  timezone: string,
+): readonly [number, number, number, number, number, number] {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  });
+  const parts = new Map<string, string>(
+    formatter.formatToParts(value).map(({ type, value: part }) => [type, part]),
+  );
+  const numeric = (name: string): number => Number(parts.get(name));
+  return [
+    numeric('year'), numeric('month'), numeric('day'), numeric('hour'), numeric('minute'),
+    numeric('second'),
+  ];
+}
+
+function localWallTimeToUtc(value: Date, timezone: string): Date {
+  const [year, month, day, hour, minute, second] = [
+    value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate(),
+    value.getUTCHours(), value.getUTCMinutes(), value.getUTCSeconds(),
+  ];
+  const candidate = Date.UTC(
+    year, month - 1, day, hour, minute, second, value.getUTCMilliseconds(),
+  );
+  const observed = zonedParts(new Date(candidate), timezone);
+  const observedAsUtc = Date.UTC(
+    observed[0], observed[1] - 1, observed[2], observed[3], observed[4], observed[5],
+  );
+  return new Date(candidate - (observedAsUtc - candidate));
+}
+
 function instant(date: Date, path: string): EngineResult<InstantValue> {
   if (!Number.isFinite(date.getTime())) {
     return fail(semanticError(
@@ -94,6 +127,7 @@ export function compileRelativeRange(
   unit: CalendarUnit,
   amount: SafeInteger | undefined,
   path: string,
+  timezone = 'UTC',
 ): EngineResult<ResolvedPredicate> {
   const anchorDate = dateFromAnchor(anchor);
   let startDate: Date;
@@ -108,13 +142,20 @@ export function compileRelativeRange(
     }
     const numericAmount: number = amount;
     startDate = shift(anchorDate, -numericAmount, unit);
-    end = { ok: true, value: anchor };
+    end = instant(new Date(anchorDate.getTime() + 1), path);
   } else {
-    const currentStart = periodStart(anchorDate, unit);
+    const parts = zonedParts(anchorDate, timezone);
+    const wallAnchor = utcDate(
+      parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5],
+    );
+    const currentStart = periodStart(wallAnchor, unit);
     startDate = op === 'inPrevious' ? shift(currentStart, -1, unit) : currentStart;
-    end = instant(op === 'inPrevious' ? currentStart : shift(currentStart, 1, unit), path);
+    end = instant(localWallTimeToUtc(
+      op === 'inPrevious' ? currentStart : shift(currentStart, 1, unit), timezone,
+    ), path);
   }
-  const start = instant(startDate, path);
+  const startDateUtc = op === 'inLast' ? startDate : localWallTimeToUtc(startDate, timezone);
+  const start = instant(startDateUtc, path);
   if (!start.ok) return start;
   if (!end.ok) return end;
   return {
