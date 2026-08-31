@@ -8,6 +8,8 @@ import type {
 import type {
   AccessRule,
   CapabilityProfile,
+  CatalogDocument,
+  DatasetDocument,
   FieldPolicy,
 } from '@agql/schemas';
 import {
@@ -150,6 +152,17 @@ export const catalog = CatalogDocumentSchema.parse({
     },
   },
 });
+
+export function catalogWithDocs(
+  transform: (dataset: DatasetDocument) => DatasetDocument,
+): CatalogDocument {
+  const docs = catalog.datasets.docs;
+  if (docs === undefined) throw new Error('Fixture catalog is missing docs.');
+  return CatalogDocumentSchema.parse({
+    ...catalog,
+    datasets: { ...catalog.datasets, docs: transform(docs) },
+  });
+}
 
 function physical(value: string): CatalogPhysicalIdentifier {
   return value as CatalogPhysicalIdentifier;

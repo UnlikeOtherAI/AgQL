@@ -24,6 +24,7 @@ import { assembleResult } from './results.ts';
 import { fuseRrfV0 } from './rrf.ts';
 import {
   adapterDescriptor,
+  catalogWithDocs,
   compileInput,
   recordsQuery,
   scope,
@@ -71,6 +72,21 @@ function adapter(
     },
   };
 }
+
+function adapterThatMustNotRun(): EngineQueryAdapter<never> {
+  return {
+    descriptor: adapterDescriptor,
+    query: {
+      compile() {
+        assert.fail('A compile-time capability refusal reached adapter compilation.');
+      },
+      execute() {
+        assert.fail('A compile-time capability refusal reached adapter execution.');
+      },
+    },
+  };
+}
+
 test('compile-time policy refusal never invokes the adapter', async () => {
   const calls = { compile: 0, execute: 0 };
   const result = await executeQuery(
@@ -79,6 +95,16 @@ test('compile-time policy refusal never invokes the adapter', async () => {
   );
   assert.equal(errorCode(result), 'REFERENCE_NOT_AVAILABLE');
   assert.deepEqual(calls, { compile: 0, execute: 0 });
+});
+
+test('dataset capability refusal never invokes the adapter', async () => {
+  const result = await executeQuery({
+    ...compileInput(recordsQuery),
+    catalog: catalogWithDocs((docs) => ({ ...docs, capabilityTags: ['docs:read'] })),
+    scope: { ...scope, capabilities: [] },
+  }, adapterThatMustNotRun());
+  assert.equal(errorCode(result), 'REFERENCE_NOT_AVAILABLE');
+  if (!result.ok) assert.deepEqual(result.errors[0]?.alternatives, []);
 });
 test('empty partitions mean nothing visible and require no backend call', async () => {
   const calls = { compile: 0, execute: 0 };

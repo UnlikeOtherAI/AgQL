@@ -7,6 +7,7 @@ import { compileQuery } from './compile.ts';
 import {
   adapterDescriptor,
   binding,
+  catalogWithDocs,
   compileInput,
   recordsQuery,
   scope,
@@ -73,6 +74,90 @@ test('hidden and nonexistent references have byte-identical refusal shapes', () 
       'docs.title',
     ],
   });
+});
+
+test('dataset capability tags refuse every query mode with the hidden-reference shape', () => {
+  const capabilityCatalog = catalogWithDocs((docs) => ({
+    ...docs,
+    capabilityTags: ['docs:read'],
+  }));
+  const deniedScope = { ...scope, capabilities: [] };
+  const queries = [
+    recordsQuery,
+    {
+      version: '0',
+      mode: 'aggregate',
+      from: 'docs',
+      dimensions: [],
+      metrics: [{ op: 'count', id: 'count' }],
+      order: [{ by: 'count', dir: 'asc' }],
+      take: 1,
+    },
+    {
+      version: '0',
+      mode: 'retrieve',
+      from: 'docs',
+      select: ['docs.id'],
+      search: {
+        kind: 'semantic',
+        using: 'body@2',
+        text: 'query',
+        accuracy: 'approximate',
+        quality: 'certified-high',
+      },
+      take: 1,
+    },
+  ];
+  for (const query of queries) {
+    const result = compileQuery({
+      ...compileInput(query),
+      catalog: capabilityCatalog,
+      scope: deniedScope,
+    });
+    assert.deepEqual(firstError(result), {
+      code: 'REFERENCE_NOT_AVAILABLE',
+      message: 'The referenced catalog item is not available in this scope.',
+      path: '/from',
+      alternatives: [],
+    });
+  }
+  const hidden = compileQuery({
+    ...compileInput(recordsQuery),
+    catalog: capabilityCatalog,
+    scope: deniedScope,
+  });
+  const missing = compileQuery({
+    ...compileInput({ ...recordsQuery, from: 'missing' }),
+    catalog: capabilityCatalog,
+    scope: deniedScope,
+  });
+  assert.equal(canonicalizeJcs(firstError(hidden)), canonicalizeJcs(firstError(missing)));
+});
+
+test('field capability requirements are enforced by the field policy', () => {
+  const requiredCapability = { effect: 'allow' as const, requiredCapabilities: ['title:read'] };
+  const result = compileQuery({
+    ...compileInput(recordsQuery),
+    catalog: catalogWithDocs((docs) => {
+      const titlePolicy = docs.fieldPolicies['docs.title'];
+      if (titlePolicy === undefined) {
+        throw new Error('Fixture catalog is missing docs.title policy.');
+      }
+      return {
+        ...docs,
+        fieldPolicies: {
+          ...docs.fieldPolicies,
+          'docs.title': {
+            ...titlePolicy,
+            select: { model: requiredCapability, principal: requiredCapability },
+          },
+        },
+      };
+    }),
+    scope,
+  });
+  assert.equal(firstError(result)?.code, 'REFERENCE_NOT_AVAILABLE');
+  assert.equal(firstError(result)?.path, '/select/1');
 });
 
 test('deployment limits lower but cannot raise the v0 constants', () => {

@@ -21,6 +21,21 @@ export type FieldOperation =
   | 'lexicalSearch'
   | { readonly aggregate: keyof FieldPolicy['aggregate'] };
 
+/**
+ * Dataset capability tags are a policy boundary, not a transport concern.
+ * Keep hidden and nonexistent datasets indistinguishable: scoped catalog
+ * discovery is the only place that may disclose reachable names.
+ */
+export function authorizedDataset(
+  context: Pick<CompileContext, 'dataset' | 'scope'>,
+): EngineResult<true> {
+  const allowed = context.dataset.capabilityTags.every((tag) =>
+    context.scope.capabilities.includes(tag));
+  return allowed
+    ? { ok: true, value: true }
+    : fail(unavailableReference('/from'));
+}
+
 function operationRule(policy: FieldPolicy, operation: FieldOperation) {
   return typeof operation === 'string'
     ? policy[operation]
