@@ -23,9 +23,8 @@
   "query": {"version": "0", "mode": "aggregate", "from": "payments", "dimensions": [], "metrics": [{"id": "mean", "op": "avg", "field": "payments.amount"}], "order": [{"by": "mean", "dir": "asc"}], "take": 1},
   "expected": {
     "outcome": "refusal",
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/metrics/0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
+    "error": {"code": "MONEY_CURRENCY_MIXED", "message": "The money aggregate contains more than one currency.", "path": "/metrics/0", "alternatives": ["Group by a catalog field that separates currencies."], "remedy": null},
     "beforeBackend": false,
-    "assertions": ["No averaged money value is returned."],
-    "gap": "The mandatory refusal has no machine code or complete error shape in RFC §10."
+    "assertions": ["No averaged money value is returned."]
   }
 }

@@ -3,7 +3,7 @@
   "id": "exact.aggregate.calendar-week-start",
   "rfc": ["§2", "§5", "§11"],
   "brief": ["§3.5"],
-  "rule": "Week buckets use a catalog-declared week start rather than a backend or locale default.",
+  "rule": "Week buckets use the catalog-declared week start and generalized ISO four-day week-year rule rather than a backend or locale default.",
   "requiresProfile": "aggregate.v0",
   "catalog": {
     "version": "cat-exact-018",
@@ -24,9 +24,8 @@
   "seed": [{"id": "sun", "at": "2024-01-07T23:59:59Z"}, {"id": "mon", "at": "2024-01-08T00:00:00Z"}],
   "query": {"version": "0", "mode": "aggregate", "from": "visits", "dimensions": [{"kind": "timeBucket", "field": "visits.at", "grain": "week", "id": "week"}], "metrics": [{"id": "n", "op": "count"}], "order": [{"by": "week", "dir": "asc"}], "take": 10},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "outcome": "success",
     "assertions": ["sun and mon are in different buckets when weekStart is monday.", "No process locale or backend DATE_TRUNC default may choose the week start."],
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "gap": "RFC v0 requires portable calendar periods but never defines the week-start catalog field, its allowed values, or ISO-week/year labeling."
+    "semantic": {"groups": [{"week": {"start": "2024-01-01T00:00:00Z", "endExclusive": "2024-01-08T00:00:00Z", "timezone": "UTC", "grain": "week", "label": "2024-W01"}, "n": 1}, {"week": {"start": "2024-01-08T00:00:00Z", "endExclusive": "2024-01-15T00:00:00Z", "timezone": "UTC", "grain": "week", "label": "2024-W02"}, "n": 1}]}
   }
 }

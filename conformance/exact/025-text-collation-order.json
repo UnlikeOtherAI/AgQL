@@ -15,7 +15,7 @@
       "rowScope": {"kind": "none", "reason": "Public conformance seed."},
       "fields": [
         {"id": "names.id", "description": "Stable name id.", "kind": "id", "nullable": false},
-        {"id": "names.value", "description": "Declared-collation text.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "UNDETERMINED_BY_RFC_V0"}
+        {"id": "names.value", "description": "Declared-collation text.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"}
       ]
     }]
   },
@@ -23,9 +23,8 @@
   "seed": [{"id": "ascii-upper", "value": "Z"}, {"id": "ascii-lower", "value": "a"}, {"id": "ring", "value": "Å"}, {"id": "umlaut", "value": "ä"}, {"id": "eszett", "value": "ß"}, {"id": "emoji", "value": "😀"}],
   "query": {"version": "0", "mode": "records", "from": "names", "select": ["names.id", "names.value"], "order": [{"by": "names.value", "dir": "asc"}, {"by": "names.id", "dir": "asc"}], "take": 10},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "assertions": ["Changing process locale cannot change the result.", "An adapter that cannot reproduce the declared collation must refuse."],
-    "gap": "RFC §§2 and 4 require a declared collation version but provide no identifiers, comparison algorithm, Unicode/CLDR version, or refusal code."
+    "outcome": "success",
+    "semantic": {"rows": [{"names.id": "ascii-upper", "names.value": "Z"}, {"names.id": "ascii-lower", "names.value": "a"}, {"names.id": "ring", "names.value": "Å"}, {"names.id": "eszett", "names.value": "ß"}, {"names.id": "umlaut", "names.value": "ä"}, {"names.id": "emoji", "names.value": "😀"}]},
+    "assertions": ["Changing process locale cannot change the result.", "An adapter that cannot reproduce Unicode 15.1.0 scalar ordering must refuse with COLLATION_UNAVAILABLE."]
   }
 }

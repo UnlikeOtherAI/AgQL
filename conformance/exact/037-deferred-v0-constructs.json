@@ -33,8 +33,23 @@
   "expected": {
     "outcomePerCase": "refusal",
     "beforeBackend": true,
-    "error": {"code": "UNSUPPORTED_IN_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "UNDETERMINED_BY_RFC_V0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
-    "assertions": ["The construct is not silently ignored.", "No implementation-specific partial semantics run."],
-    "gap": "RFC §1 fixes the code but does not reserve a wire syntax for most deferred constructs, or define per-construct paths, messages, and legal alternatives. The query members in cases are probe spellings, not a claim that these become future syntax."
+    "errorsByCase": {
+      "query-authored-join": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/joins", "alternatives": ["Remove the construct."], "remedy": null},
+      "edge": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/edges", "alternatives": ["Remove the construct."], "remedy": null},
+      "nested-query": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/where/query", "alternatives": ["Remove the construct."], "remedy": null},
+      "derive": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/derive", "alternatives": ["Remove the construct."], "remedy": null},
+      "merge": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/mode", "alternatives": ["Remove the construct."], "remedy": null},
+      "percentile": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/metrics/0/op", "alternatives": ["Remove the construct."], "remedy": null},
+      "rerank": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/search/rerank", "alternatives": ["Remove the construct."], "remedy": null},
+      "multi-vector": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/search/using", "alternatives": ["Remove the construct."], "remedy": null},
+      "materialized-dataset": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/materialize", "alternatives": ["Remove the construct."], "remedy": null},
+      "artifact": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/mode", "alternatives": ["Remove the construct."], "remedy": null},
+      "publication": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/publish", "alternatives": ["Remove the construct."], "remedy": null},
+      "federation": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/from", "alternatives": ["Remove the construct."], "remedy": null},
+      "attenuable-credential": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/credential", "alternatives": ["Remove the construct."], "remedy": null},
+      "differential-privacy": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/privacy", "alternatives": ["Remove the construct."], "remedy": null},
+      "derived-policy-propagation": {"code": "UNSUPPORTED_IN_V0", "message": "This construct is reserved and unsupported in AgQL v0.", "path": "/derive", "alternatives": ["Remove the construct."], "remedy": null}
+    },
+    "assertions": ["The construct is not silently ignored.", "No implementation-specific partial semantics run.", "The reserved probe spellings specify refusal paths only and do not become accepted v0 syntax."]
   }
 }

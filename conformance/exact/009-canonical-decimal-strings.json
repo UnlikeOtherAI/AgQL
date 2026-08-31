@@ -2,7 +2,7 @@
   "format": "agql-exact-fixture/0.1",
   "id": "exact.records.canonical-decimal-strings",
   "rfc": ["§2", "§3", "§11"],
-  "rule": "A decimal has one canonical string spelling before hashing or execution, but the RFC does not publish that spelling algorithm.",
+  "rule": "Variable-scale decimal input is normalized to one exponent-free, zero-normalized canonical string before hashing or storage.",
   "requiresProfile": "records.v0",
   "catalog": {
     "version": "cat-exact-009",
@@ -22,8 +22,8 @@
   "seed": [{"id": "plain", "value": "1"}, {"id": "trailing", "value": "1.0"}, {"id": "leading", "value": "01.00"}, {"id": "negative-zero", "value": "-0"}, {"id": "exponent", "value": "1e0"}],
   "query": {"version": "0", "mode": "records", "from": "decimal_spellings", "select": ["decimal_spellings.id", "decimal_spellings.value"], "order": [{"by": "decimal_spellings.id", "dir": "asc"}], "take": 10},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "gap": "RFC §2 says canonical decimal string without specifying leading zeros, trailing zeros, negative zero, exponent notation, scale-preserving output, or rejection versus normalization. RFC 8785 canonicalizes the JSON string token, not the decimal inside it."
+    "outcome": "success",
+    "semantic": {"rows": [{"decimal_spellings.id": "exponent", "decimal_spellings.value": "1"}, {"decimal_spellings.id": "leading", "decimal_spellings.value": "1"}, {"decimal_spellings.id": "negative-zero", "decimal_spellings.value": "0"}, {"decimal_spellings.id": "plain", "decimal_spellings.value": "1"}, {"decimal_spellings.id": "trailing", "decimal_spellings.value": "1"}]},
+    "assertions": ["Exponent notation is expanded, redundant zeros are removed, and negative zero becomes zero before storage."]
   }
 }

@@ -23,9 +23,8 @@
   "query": {"version": "0", "mode": "records", "from": "tasks", "select": ["tasks.id", "tasks.status"], "where": {"kind": "predicate", "field": "tasks.status", "op": "eq", "value": "In progress"}, "order": [{"by": "tasks.id", "dir": "asc"}], "take": 10},
   "expected": {
     "outcome": "refusal",
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/where/value", "alternatives": ["done", "in_progress"]},
+    "error": {"code": "ENUM_VALUE_INVALID", "message": "The value is not a declared enum code.", "path": "/where/value", "alternatives": ["done", "in_progress"], "remedy": null},
     "beforeBackend": true,
-    "assertions": ["The label is not silently mapped to the code.", "Legal alternatives enumerate stable codes, not display labels."],
-    "gap": "RFC §10 does not name the invalid-enum-value code or sentence."
+    "assertions": ["The label is not silently mapped to the code.", "Legal alternatives enumerate stable codes in Unicode code-point order, not display labels."]
   }
 }

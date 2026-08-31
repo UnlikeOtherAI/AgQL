@@ -2,7 +2,7 @@
   "format": "agql-exact-fixture/0.1",
   "id": "exact.records.enum-ordering",
   "rfc": ["§2", "§4", "§5", "§11"],
-  "rule": "Enum ordering must operate on a specified property of stable codes and never on mutable display labels, but RFC v0 does not define the ordering relation.",
+  "rule": "Enum ordering is Unicode code-point ordering of stable codes and never uses labels or declaration order.",
   "requiresProfile": "records.v0",
   "catalog": {
     "version": "cat-exact-013",
@@ -22,9 +22,8 @@
   "seed": [{"id": "i-low", "severity": "z_low"}, {"id": "i-high", "severity": "a_high"}, {"id": "i-medium", "severity": "m_medium"}],
   "query": {"version": "0", "mode": "records", "from": "issues", "select": ["issues.id", "issues.severity"], "order": [{"by": "issues.severity", "dir": "asc"}, {"by": "issues.id", "dir": "asc"}], "take": 10},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "assertions": ["Changing only labels cannot change the order."],
-    "gap": "RFC §2 says the stable code is the value but does not say whether enum ordering is code collation, declaration order, separately declared rank, or forbidden."
+    "outcome": "success",
+    "semantic": {"rows": [{"issues.id": "i-high", "issues.severity": "a_high"}, {"issues.id": "i-medium", "issues.severity": "m_medium"}, {"issues.id": "i-low", "issues.severity": "z_low"}]},
+    "assertions": ["Changing only labels or declaration order cannot change the order."]
   }
 }

@@ -19,10 +19,14 @@
   "seed": [{"id": "i-1"}],
   "query": {"version": 0, "mode": "records", "from": "items", "select": "items.missing", "where": {"kind": "predicate", "field": "items.missing", "op": "eq", "value": "x"}, "order": "items.id", "take": 0},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "outcome": "refusal",
     "beforeBackend": true,
     "assertions": ["No semantic hidden/missing-field decision is made until every structural error has been returned or repaired.", "The same document yields the same structural error sequence on every adapter."],
-    "structuralErrors": "UNDETERMINED_BY_RFC_V0",
-    "gap": "RFC §10 does not publish the promised error catalog, JSON Schema, structural limit constants, structural error ordering within a batch, or whether all structural errors are one result or sequential repair results."
+    "structuralErrors": [
+      {"code": "SCHEMA_TYPE_MISMATCH", "message": "The value has the wrong JSON type.", "path": "/version", "alternatives": ["Use the JSON string \"0\"."], "remedy": null},
+      {"code": "SCHEMA_TYPE_MISMATCH", "message": "The value has the wrong JSON type.", "path": "/select", "alternatives": ["Use a JSON array of field ids."], "remedy": null},
+      {"code": "SCHEMA_TYPE_MISMATCH", "message": "The value has the wrong JSON type.", "path": "/order", "alternatives": ["Use a JSON array of order items."], "remedy": null},
+      {"code": "LIMIT_OUT_OF_RANGE", "message": "The bounded integer is outside the permitted range.", "path": "/take", "alternatives": ["Use an integer from 1 through 1000."], "remedy": null}
+    ]
   }
 }

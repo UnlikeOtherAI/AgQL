@@ -30,9 +30,8 @@
   "query": {"version": "0", "mode": "records", "from": "events", "select": ["events.id"], "where": {"kind": "predicate", "field": "events.at", "op": "inPrevious", "unit": "week"}, "order": [{"by": "events.id", "dir": "asc"}], "take": 10},
   "execution": {"anchor": "2024-03-06T12:34:56Z"},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "outcome": "success",
     "assertions": ["With a Monday week start, previous-start and previous-end-minus are eligible; before and current-start are not.", "The anchor and expanded interval appear in provenance or plan audit data."],
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "gap": "RFC v0 does not normatively define week start, interval inclusivity, or the provenance representation of the compiler-expanded interval."
+    "semantic": {"rows": [{"events.id": "previous-end-minus"}, {"events.id": "previous-start"}]}
   }
 }

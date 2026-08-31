@@ -3,7 +3,7 @@
   "id": "exact.records.pagination-reproducibility",
   "rfc": ["§5", "§11"],
   "brief": ["§3.5"],
-  "rule": "Pagination must preserve the same total order and cannot skip or duplicate tied rows, but RFC v0 defines take and no page or cursor request shape.",
+  "rule": "Principal-channel cursor pagination preserves one snapshot-bound total order without skipping or duplicating tied rows.",
   "requiresProfile": "records.v0",
   "catalog": {
     "version": "cat-exact-003",
@@ -25,10 +25,11 @@
     {"id": "e-2", "at": "2024-01-01T00:00:00.000Z"},
     {"id": "e-3", "at": "2024-01-01T00:00:00.000Z"}
   ],
-  "query": "UNDETERMINED_BY_RFC_V0",
+  "query": {"version": "0", "mode": "records", "from": "events", "select": ["events.id", "events.at"], "order": [{"by": "events.at", "dir": "asc"}], "take": 3},
+  "execution": {"channel": "principal", "pageSize": 2},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
-    "assertions": ["Concatenating consecutive pages must equal the one-shot total order, with each eligible stable id appearing exactly once."],
-    "gap": "RFC §5 does not define pagination, cursor contents, cursor identity binding, snapshot interaction, or even an offset/page field."
+    "outcome": "success",
+    "semantic": {"concatenatedRows": [{"events.id": "e-1", "events.at": "2024-01-01T00:00:00.000Z"}, {"events.id": "e-2", "events.at": "2024-01-01T00:00:00.000Z"}, {"events.id": "e-3", "events.at": "2024-01-01T00:00:00.000Z"}]},
+    "assertions": ["Page one contains e-1 and e-2 and returns an opaque cursor; page two contains e-3 and a null nextCursor.", "The cursor binds the query, scope, principal channel, total-order key, and one request-or-stronger snapshot.", "Concatenating consecutive pages equals the one-shot bounded total order, with each eligible stable id appearing exactly once."]
   }
 }

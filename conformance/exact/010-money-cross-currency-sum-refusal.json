@@ -23,9 +23,8 @@
   "query": {"version": "0", "mode": "aggregate", "from": "payments", "dimensions": [], "metrics": [{"id": "total", "op": "sum", "field": "payments.amount"}], "order": [{"by": "total", "dir": "asc"}], "take": 1},
   "expected": {
     "outcome": "refusal",
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/metrics/0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
+    "error": {"code": "MONEY_CURRENCY_MIXED", "message": "The money aggregate contains more than one currency.", "path": "/metrics/0", "alternatives": ["Group by a catalog field that separates currencies."], "remedy": null},
     "beforeBackend": false,
-    "assertions": ["No numeric total is returned.", "The rejection is a typed result rather than an exception or transport error."],
-    "gap": "RFC §§2 and 5 mandate refusal but the normative error catalog promised by §10 is absent, so the required machine code, sentence, and alternatives cannot be derived. Whether the mixed currency is known at compile time or only after execution is also unspecified."
+    "assertions": ["No numeric total is returned.", "The rejection is an execution-time typed result after only authorized per-currency partials, rather than an exception or transport error."]
   }
 }

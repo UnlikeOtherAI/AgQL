@@ -31,7 +31,6 @@
     "beforeBackend": true,
     "compareWith": {"left": "queries.unauthorized", "right": "queries.nonexistent", "relation": "error-jcs-bytes-equal"},
     "assertions": ["Neither error message, code, path treatment, nor alternatives reveals that people.salary exists.", "Alternatives contain only in-scope visible field ids."],
-    "errorShape": "UNDETERMINED_BY_RFC_V0",
-    "gap": "The equality requirement is normative, but RFC §10 does not define the shared hidden/nonexistent error code, sentence, path redaction rule, or alternatives ordering."
+    "errorShape": {"code": "REFERENCE_NOT_AVAILABLE", "message": "The referenced catalog item is not available in this scope.", "path": "/select/0", "alternatives": ["people.id", "people.name"], "remedy": null}
   }
 }

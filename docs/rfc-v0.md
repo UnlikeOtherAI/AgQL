@@ -91,7 +91,10 @@ and maps every negative zero to zero. The canonical variable-scale form is
 `0` or `-?(0|[1-9][0-9]*)(\.[0-9]*[1-9])?`; it has no exponent.
 
 A catalog decimal field either declares both `precision` and `scale`, or
-neither. Both omitted means variable scale with maximum precision 38. Otherwise
+neither. Both omitted means variable scale with maximum precision and scale 38.
+Exponent bounds are checked arithmetically before expansion; a normalized value
+requiring more than 38 coefficient or fractional digits is refused without
+allocating the expanded string. Otherwise
 `1 <= precision <= 38` and `0 <= scale <= precision`. A fixed-scale canonical
 value has exactly `scale` fractional digits. Boundary normalization MAY remove
 only fractional zeros beyond that scale and MUST pad missing fractional zeros;
@@ -131,13 +134,17 @@ and accepts any code in the pinned table. A declared field scale, not the ISO
 minor-unit column, controls wire digits; this permits governed sub-minor-unit
 accounting without changing the currency identity.
 
+v0 has no currency-conversion definition or rate source; a conversion member is
+an unknown construct rather than permission to combine currencies.
+
 `sum` and `avg` ignore nulls, then require one currency in each output group.
 If more than one remains, execution returns `MONEY_CURRENCY_MIXED` at the metric
-path after the backend has computed only authorized per-currency partials. A
-`moneyCurrency` dimension explicitly groups by the value's currency and makes
-that group single-currency. A separate enum field that happens to contain a
-currency code does not prove this property. Same-currency fixed-field `sum`
-keeps the field scale and `avg` uses `max(field scale,9)` with ties-to-even.
+path after the backend has computed only authorized per-currency partials. The
+check is per output group: a normal field dimension that separates currencies
+therefore succeeds when each runtime group contains one currency, and any
+mis-grouped currency still refuses. v0 adds no hidden or money-specific grouping
+node. Same-currency fixed-field `sum` keeps the field scale and `avg` uses
+`max(field scale,9)` with ties-to-even.
 Variable-field `sum` uses minimal canonical scale and `avg` uses scale 9. `min`
 and `max` keep the selected value's canonical scale. A money result always
 retains its currency object.
@@ -187,6 +194,8 @@ no dimensions, an empty input still emits one aggregate group; with dimensions
 it emits none. `ratio` is null if either operand is null or the denominator is
 zero, and its group is retained. Null dimension values compare equal for
 grouping and form one null group.
+Keeping null last independently of direction prevents a direction change from
+also changing the missing-value policy.
 
 ## 3. Canonicalization, operation context, and identities
 
@@ -268,17 +277,21 @@ rules without standardizing a backend plan serialization.
 (inapplicable values are JSON null):
 
 ```json
-{"adapterVersion":"…","anchor":null,"bindingVersion":"…",
+{"adapterVersion":"…","afterWrite":null,"anchor":null,"bindingVersion":"…",
  "channel":"model","channelPolicyHash":"sha256:…",
  "effectivePlanHash":"sha256:…","embeddingSpec":null,
- "engineVersion":"…","pageSnapshot":null,"qualityCertification":null,
+ "engineVersion":"…","page":null,"qualityCertification":null,
  "qualityProfile":null,"snapshotOrWatermark":null}
 ```
 
 For retrieval, `embeddingSpec` is `{id,modelRevision}`; for relative time the
-anchor is the exact supplied string. `pageSnapshot` binds the immutable
-pagination snapshot. Caches key on `executionFingerprint`; audit stores all
-three identities and every preimage member.
+anchor is the exact supplied string. `page.snapshot` binds the immutable
+pagination snapshot. For a paged execution, `page` is
+`{snapshot,position,pageSize}` with zero-based emitted-result position; it is
+null otherwise. `afterWrite` is null or the normalized receipt, sorted
+requirements, and sorted per-record observation tokens described by §7.3.
+Caches key on `executionFingerprint`; audit stores all three identities and
+every preimage member.
 
 `channelPolicyHash` is the §3 digest over JCS of `{channel,datasetPolicy}` after
 scope filtering, including the channel's field, embedding, and release entries.
@@ -318,6 +331,9 @@ name a non-null `id` field. Every profile, field reference, embedding reference,
 scope dimension, default filter, and source field MUST resolve within the
 catalog. Default filters are always conjoined with query `where`; v0 has no
 query opt-out.
+Model-facing documentation and tool enums are generated from the
+operation-specific scope-filtered catalog; hand-maintained parallel vocabulary
+is non-conformant.
 
 `Field` has common members `{id, description, kind, nullable}` and exactly the
 kind-specific members below:
@@ -357,7 +373,7 @@ fixed offset may use `fixed-offset`. A deployment lacking the pinned data
 refuses `CALENDAR_UNAVAILABLE`, never substitutes newer local tzdb data.
 
 `Weekday` is `monday` through `sunday`. Supported grains are `day`,
-`fiscalDay`, `week`, `month`, `quarter`, and `year`. A bucket value is:
+`fiscalDay`, `week`, and `month`. A bucket value is:
 
 ```text
 CalendarPeriod = {
@@ -368,8 +384,8 @@ CalendarPeriod = {
 
 The boundary instants use the smallest precision needed, normally seconds,
 and define a half-open interval. Labels are `YYYY-MM-DD` for day/fiscalDay,
-`YYYY-Www` for week, `YYYY-MM` for month, `YYYY-Qn` for quarter, and `YYYY`
-for year. Week 1 is the declared-week-start period containing at least four
+`YYYY-Www` for week, and `YYYY-MM` for month. Week 1 is the
+declared-week-start period containing at least four
 days of the new calendar year; its `YYYY` is that week-year. This generalizes
 ISO week numbering without consulting locale.
 
@@ -379,8 +395,8 @@ distinguishes buckets; the remaining keys make the result relation total.
 
 A civil day begins at local midnight. A fiscal day begins at the catalog's
 `fiscalDayStart` and its label is the local date on which that start occurs.
-Week boundaries use `weekStart` and `fiscalDayStart`; month, quarter, and year
-boundaries use `fiscalDayStart`. Each next boundary is computed in civil time,
+Week boundaries use `weekStart` and `fiscalDayStart`; month boundaries use
+`fiscalDayStart`. Each next boundary is computed in civil time,
 not by adding elapsed hours. If a boundary local time is nonexistent, use the
 first valid instant after the gap; if repeated, use the earlier instant.
 Records are instants, so both occurrences of a repeated local time remain
@@ -417,6 +433,9 @@ Order = {by:FieldId|OutputId, dir:"asc"|"desc"}
 optional `select` adds fields and MUST NOT repeat the id field. Aggregate output
 is its dimensions and metrics. A field/output reference is matched only against
 the scope-filtered catalog/namespace appropriate to that position.
+Records/aggregate `order` and aggregate `metrics` are non-empty; aggregate
+`dimensions` and retrieve `select` may be empty. `and`/`or` and `in`/`notIn`
+arrays are non-empty. Duplicate select/order entries are semantic errors.
 
 Predicates are the following closed union:
 
@@ -426,7 +445,6 @@ Predicates are the following closed union:
 {kind:"predicate", field:FieldId, op:"in"|"notIn", values:[Scalar]}
 {kind:"predicate", field:FieldId, op:"isNull"|"isNotNull"}
 {kind:"predicate", field:FieldId, op:"contains"|"startsWith", value:Text}
-{kind:"range", field:FieldId, start:Scalar, endExclusive:Scalar}
 {kind:"predicate", field:InstantField,
  op:"inLast", amount:PositiveInteger, unit:RelativeUnit}
 {kind:"predicate", field:InstantField,
@@ -435,23 +453,24 @@ Predicates are the following closed union:
 {kind:"not", item:Predicate}
 ```
 
-`range` is exactly `field >= start AND field < endExclusive`; null is false,
-and start MUST compare below end. This is the half-open range construct named
-by conformance. Adapters MUST NOT replace an explicit `gte`/`lt` pair with a
-backend `BETWEEN` whose upper bound is inclusive.
+The v0 half-open range form is an `and` containing `gte start` and
+`lt endExclusive` predicates on the same field; start MUST compare below end.
+There is no separate `range`/`between` member. This is the construct meant by
+the conformance family and is directly exercised by its fixture. Adapters MUST
+NOT replace it with a backend `BETWEEN` whose upper bound is inclusive.
 
-`RelativeUnit` is `second`, `minute`, `hour`, `day`, `week`, `month`,
-`quarter`, or `year`; `CalendarUnit` is `day`, `fiscalDay`, `week`, `month`,
-`quarter`, or `year`. `inLast` is a rolling interval ending at the anchor:
+`RelativeUnit` and `CalendarUnit` are `day`, `week`, or `month`. `inLast` is a
+rolling interval ending at the anchor:
 `[anchor - amount*unit, anchor]`, both endpoints included, and future rows are
-excluded. Seconds/minutes/hours subtract elapsed SI time; larger units subtract
-civil calendar units in the catalog timezone while preserving local time,
-clamping an unavailable day-of-month to that month's last day, and using §4.1
-gap/repeat resolution. One week is seven civil days and one quarter is three
-civil months. `inCurrent` selects the anchor's entire
+excluded. Units subtract civil calendar units in the catalog timezone while
+preserving local time, clamping an unavailable day-of-month to that month's last
+day, and using §4.1 gap/repeat resolution. One week is seven civil days.
+`inCurrent` selects the anchor's entire
 calendar period and `inPrevious` the immediately preceding one, both as
-`[start,endExclusive)`. The compiler records the anchor and expanded UTC
-boundaries in plan audit data and the anchor in result provenance.
+`[start,endExclusive)`. Thus `inCurrent` includes future-dated rows inside the
+current period; only `inLast` caps at the anchor. The compiler records the
+anchor and expanded UTC boundaries in plan audit data and the anchor in result
+provenance.
 
 ### 5.2 Ordering, aliases, and pagination
 
@@ -459,7 +478,9 @@ Records ordering is total. If the final explicit order item is not the dataset
 id field, the engine appends that field ascending. If the id field occurs
 earlier, compilation refuses rather than creating contradictory duplicates.
 An explicitly final id direction is honored. The implicit ascending decision
-is stable across all modes and is part of the effective plan.
+is stable across all modes and is part of the effective plan. Ascending is
+chosen rather than inheriting the prior key so an unrelated sort edit cannot
+silently reverse pagination ties.
 
 Aggregate order references the single shared output namespace. The engine
 appends every dimension id not already present, in declaration order,
@@ -474,7 +495,7 @@ not a per-page escape from the bound. `pageSize` defaults at execution to
 of the bounded result remains, it returns a cursor; the next request supplies
 the identical query and that cursor.
 
-A cursor is an opaque `cursor:<base64url-no-padding>` string of 8 through 512
+A cursor is an opaque `cursor:<base64url-no-padding>` string of 22 through 512
 encoded characters. It binds issuer, principal channel, source/effective plan
 hashes, scope fingerprint, execution fingerprint inputs, total order key,
 emitted count, `take`, and a request/transaction/historical snapshot. Its
@@ -485,13 +506,14 @@ cursor never restarts at page one. Concatenated pages therefore equal the
 one-shot bounded result without skip or duplication under concurrent writes.
 Model responses never contain a cursor. Cursor issuance and stateless payloads
 obey the entropy, AEAD, rotation, one-layer decoding, and canary rules of §7.2.
+Offset and page-number members are absent because they cannot bind a tied order
+to one snapshot.
 
 ### 5.3 Aggregate grammar
 
 ```text
 Dimension = {kind:"field", field:FieldId, id:OutputId}
           | {kind:"timeBucket", field:InstantField, grain:Grain, id:OutputId}
-          | {kind:"moneyCurrency", field:MoneyField, id:OutputId}
 Metric = {id:OutputId, op:"count", where:Predicate?}
        | {id:OutputId, op:"countDistinct"|"sum"|"avg"|"min"|"max",
           field:FieldId, where:Predicate?}
@@ -499,7 +521,7 @@ Metric = {id:OutputId, op:"count", where:Predicate?}
 Having = predicate tree whose leaves use `metric:OutputId` instead of `field`
 ```
 
-Ratio operands MUST name earlier non-ratio numeric metrics. Each operand uses
+Ratio operands MUST name earlier non-ratio integer or decimal metrics. Each operand uses
 its own metric filter; no filter is copied or aligned implicitly. Both are
 computed over the same base `where`, scope, and dimension group, then §2.2 and
 §2.6 apply. Output-id collisions are reported at the later declaration, so a
@@ -540,7 +562,8 @@ Reference metric ordering is exact over the decoded binary32 dyadic rationals:
   rounded square root.
 
 Equal reference values tie by stable id ascending. An adapter's normalized
-diagnostic distance, where inspected by conformance, must differ from the
+diagnostic distance is `1-cosine`, negative dot product, or squared Euclidean,
+respectively. Where inspected by conformance, it must differ from the
 reference by no more than `max(0.000001, abs(reference)*0.000001)`. Tolerance
 never permits different membership or order for exact retrieval.
 
@@ -573,7 +596,7 @@ a repairable limit refusal, never truncation.
 | retrieval `take` | 100 | bounds candidate and fusion work |
 | text predicate/search UTF-8 bytes | 4,096 | bounds parameter and embedding input |
 | `afterWrite.require` entries | 32 | bounds visibility fan-out |
-| `afterWrite.timeoutMs` | 1 through 30,000 | avoids unbounded request occupancy |
+| `afterWrite.timeoutMs` | 0 through 30,000 | zero is a non-blocking visibility check; maximum bounds occupancy |
 
 Predicate-node count includes every leaf and boolean node. Boolean root depth is
 zero; each boolean child increments it, while a leaf does not. Structural tree
@@ -597,11 +620,11 @@ Scope = {
 }
 ```
 
-Capabilities and partition values are sets and canonicalize as §3.3 states.
-Every partition dimension declared by the dataset MUST appear. An empty array
-means an unsatisfiable scope and therefore no visible rows, never all rows.
-Extra dimensions do not widen scope and are rejected. Expired scope is refused
-before catalog disclosure or backend access.
+Capabilities and partition values are sets and canonicalize as §3.3 states. A
+declared dataset partition dimension missing from the map, an empty array, or an
+entirely empty partitions map means an unsatisfiable scope and therefore no
+visible rows, never all rows. Extra dimensions do not widen scope and are
+rejected. Expired scope is refused before catalog disclosure or backend access.
 
 Policy is:
 
@@ -645,11 +668,13 @@ lexical and semantic channels require their separate permissions. Principal
 execution is a new authenticated operation and re-evaluates the same query; it
 does not inherit a model compile. Operator has no implicit principal rights.
 
-`minimumCohort` applies to aggregate groups after metric computation and before
-channel release, using the distinct stable records contributing to the group.
-A group below the minimum is omitted as a whole. The envelope reports only
-`suppressed:true`; it reports neither suppressed group count nor cohort size.
-The policy is an inference dampener, not differential privacy.
+`minimumCohort` applies after eligibility and before channel release, using
+distinct stable record ids. For records/retrieve it gates the entire eligible
+set before `take`/rank release; for aggregate it gates each group by its
+contributors. A below-minimum set/group is emitted exactly like an empty one:
+no row, group, metric, count, rank, truncation signal, cohort size, or
+suppression flag. Operator audit may record suppression only under operator
+policy. The policy is an inference dampener, not differential privacy.
 
 An unauthorized and a nonexistent reference use byte-identical
 `REFERENCE_NOT_AVAILABLE` results. Paths identify only the syntactic slot, and
@@ -668,15 +693,32 @@ catalog member from a nonexistent one.
 
 `principalResultAvailable` is computed only from authenticated host capability
 and whether principal policy could expose an additional channel. It MUST NOT
-depend on row existence, count, suppression, or hidden catalog membership.
+depend on row existence, count, suppression, or hidden catalog membership. It
+is always false when a model-channel release policy applies, regardless of
+cohort outcome, so it cannot become a threshold oracle.
 
 ## 7. Ingestion, receipt states, and freshness
 
-Ingest is a separate, non-query contract. Its operations are `insertOnly`,
-whole-record `replace`, and `delete`, with stable ids, a required idempotency
-key, per-record outcomes, and one batch receipt. `ifVersion` compare-and-swap is
-a declared canonical-store capability. No update operator, expression, query,
-or `merge` is reachable from ingest; no mutation is reachable from Query.
+Ingest is a separate, non-query contract:
+
+```text
+IngestRequest = {dataset:DatasetId,mode:"insertOnly"|"replace"|"delete",
+  records:[{id:Id,value:{FieldLocalId:Scalar},ifVersion:Integer?}
+          | {id:Id,ifVersion:Integer?}],
+  embeddingPolicy:"catalog",idempotencyKey:NonEmptyString}
+IngestResult = {outcomes:[{id:Id,status:"accepted"|"refused",
+                           version:Integer|null,error:Error|null}],
+                writeReceipt:WriteReceipt}
+```
+
+`value` is required for insert/replace and forbidden for delete; it is a closed
+whole record excluding the id field. Records are validated independently in
+array order and retain one outcome each. Its operations use stable ids, a
+required idempotency key, per-record outcomes, and one batch receipt.
+`ifVersion` compare-and-swap is a declared canonical-store capability. No
+update operator, expression, query, or `merge` is reachable from ingest; no
+mutation is reachable from Query. The same server-resolved Scope is mandatory
+and is checked before any write; ingest cannot use that scope to query.
 
 ### 7.1 Receipt wire form and state machine
 
@@ -697,7 +739,8 @@ AfterWrite = {receipt:ReceiptToken, require:[Representation], timeoutMs:Integer}
 observation and error lists sort first by stable record id and then by
 representation under §2.5.
 
-`token` is present only for `ready`; `failureCode` only for `failed`.
+`token` is present only for `ready`; `failureCode` only for `failed` and is a
+stable AgQL code, never native backend text.
 State identity is `(receipt, record id, record version, representation)`. The
 only valid transitions are:
 
@@ -726,13 +769,15 @@ backend-shaped delete-state vocabulary exists.
 ### 7.2 Token requirements
 
 Receipt tokens use `wr_<base64url-no-padding>` and visibility tokens use
-`opaque:<base64url-no-padding>`, each with 8 through 512 encoded characters.
+`opaque:<base64url-no-padding>`, each with 22 through 512 encoded characters.
 Production issuance MUST draw at least 128 unpredictable bits from a CSPRNG.
 Tokens bind server-side to issuer, catalog/source, dataset, operation, record
 versions, authenticated principal authority, and the write scope; they are
 invalid under a wider or unrelated query scope. Receipt expiry is explicit and
 no more than 24 hours after issue. Rotation MUST keep an issued token usable
 until its expiry or return `RECEIPT_EXPIRED`; it may not silently reinterpret it.
+Receipt-suite scheduler labels such as `wr_fixture_…` are harness identities
+that runners replace with issued tokens; they are not production wire tokens.
 
 An opaque token is either a random lookup handle or an authenticated-encrypted
 payload. If stateless, it MUST use an AEAD construction with a rotating key and
@@ -786,24 +831,31 @@ Success = {
     executionSnapshot:"none"|"request"|"transaction"|"historicalPinned",
     replay:"auditable"|"reevaluable"|"exactReplay"},
   provenance:Provenance,
-  release:{minimumCohort:Integer|null,suppressed:Boolean},
+  release:{minimumCohort:Integer|null},
   principalResultAvailable:Boolean,
   timings:{auth:Integer,validationPolicy:Integer,queryEmbedding:Integer,
            adapterCompile:Integer,backend:Integer,fusionRelease:Integer}|null
 }
 ResultColumn = {id:String,kind:Kind|"calendarPeriod"|"rank",nullable:Boolean,
-                precision:Integer|null,scale:Integer|null}
+  precision:Integer|null,scale:Integer|null,enumCodes:[String]|null,
+  currencies:[Currency]|null,collation:"unicode-codepoint-v0"|null,
+  instantPrecision:"second"|"millisecond"|"microsecond"|null,
+  calendar:{grain:Grain,timezone:TimeZone}|null}
 ```
 
 Every listed member is present; JSON null is used only where shown. Result rows
 are closed objects containing exactly the schema ids. Records and aggregate
 rows preserve total query order; retrieval rows additionally carry one-based
-integer `rank`. Raw scores/distances never appear. Model data is capped at
+integer `rank`. Schema columns are records `select` order, aggregate dimensions
+then metrics in declaration order, or retrieve id field, additional `select`
+order, then `rank`; channel-filtered columns are removed without reordering.
+`data` uses `groups` only for aggregate and `rows` otherwise. `page.returned`
+equals the array length. Raw scores/distances never appear. Model data is capped at
 `min(take,20)` rows/groups and `nextCursor` is null. Principal data uses §5.2
 pagination. Operator data is capped at `min(take,100)` and has no cursor.
-`truncated` is true exactly when additional results within the query's bounded
-`take` were omitted from this channel/page. Suppression can make it true without
-revealing a count.
+`truncated` is true exactly when additional released results within the query's
+bounded `take` were omitted from this channel/page. A cohort-suppressed result
+has empty data, `returned:0`, `truncated:false`, and no suppression outcome bit.
 
 `Provenance` is closed and always contains:
 
@@ -824,7 +876,8 @@ revealing a count.
 
 All hashes use §3. `qualityCertification` is a certification reference or null
 only for exact retrieval; approximate retrieval always carries a reference,
-including one whose status is `measurementRequired` or `stale`.
+whose status is `valid` or, for a null-threshold measurement profile,
+`measurementRequired`. A stale claimed certification refuses before an answer.
 
 Principal results are served only by a separately authenticated endpoint and
 MUST never appear in a model payload. `principalResultAvailable` is
@@ -857,12 +910,17 @@ is portable between sources iff both advertise the required profile and every
 required capability. Declining is conformant; silent downgrade is not.
 
 Adapters receive a resolved, typed, scope-expanded logical plan, never the model
-AST. Model scalars use native parameters/typed API values; physical identifiers
-come only from binding/catalog resolution. Adapters have hard row/candidate
+AST. Every model-produced string is either matched to a catalog/enum key or
+sent as a native parameter/typed API value; there is no third path. Physical
+identifiers come only from binding/catalog resolution. Adapters have hard row/candidate
 limits and read-only query credentials. Bounded compensation is limited to
 projection/redaction, canonical scalar conversion, total tie ordering over a
 bounded result, `rrf-v0`, and exact distance-convention normalization. There is
 no engine-side authorization filtering, join, grouping, or vector search.
+
+Compilation is a pure function of query, immutable catalog/policy, normalized
+scope, binding, engine, and adapter versions. It reads no clock or randomness;
+relative time uses only the supplied anchor.
 
 ### 9.1 Exact-scan admission
 
@@ -890,10 +948,13 @@ QualityProfile = {
 
 `certificationMaxAgeDays` is 1 through 30. `thresholds:null` means the profile
 is measurement-only and its certification status is `measurementRequired`; it
-is not a claimed recall floor. v0's initial `baseline-unset-v0` has null
-thresholds. Values MUST remain null until the first common corpus has been run
-across adapters. This is the one intentional open product value: inventing a
-threshold before measurement would create a false conformance promise.
+is not a claimed recall floor but MAY execute so measurements and safety probes
+can be collected. A profile with non-null thresholds requires a matching valid
+certification; missing/stale certification or an uncovered filter shape refuses
+with §10 rather than returning an answer. v0's initial `baseline-unset-v0` has
+null thresholds. Values MUST remain null until the first common corpus has been
+run across adapters. This is the one intentional open product value: inventing
+a threshold before measurement would create a false conformance promise.
 
 For eligible ids `E`, requested `k`, exact top set `T` of size
 `min(k,|E|)`, and returned eligible ids `R`, recall is `|R intersect T|/|T|`.
@@ -912,10 +973,9 @@ QualityCertification = {
   corpus:{manifestPath:String,corpusSha256:Hash,oracleFixtureSha256:Hash},
   configuration:{adapterId:String,adapterVersion:String,bindingVersion:String,
     engineVersion:String,embeddingSpec:{id:EmbeddingSpecId,modelRevision:String},
-    indexConfigurationDigest:Hash,dataDistributionDigest:Hash,
-    filterFamily:String,qualityProfile:VocabularyId,
+    indexConfigurationDigest:Hash,filterFamily:String,qualityProfile:VocabularyId,
     measurementProcedure:"recall-at-k-distribution-v1"},
-  measurement:{measuredAt:Instant,expiresAt:Instant,queryCount:Integer,k:Integer,
+  measurement:{measuredAt:Instant,queryCount:Integer,k:Integer,
     eligibilityViolations:0,report:{perQuery:[{queryId:String,k:Integer,
       exactRelevantCount:Integer,returnedEligibleCount:Integer,
       relevantReturnedCount:Integer,recall:Decimal|"emptyEligible"}],
@@ -930,12 +990,14 @@ QualityCertificationRef = {certificationId:String,version:String,
 
 A certification contains id/version; corpus and oracle digests; adapter,
 binding, engine, EmbeddingSpec/model revision, index-configuration,
-filter-family, quality-profile, measurement-procedure, and data-distribution
-digests; measuredAt/expiresAt; k/query count; zero eligibility violations; full
-report; thresholds; and status `valid`, `stale`, or `measurementRequired`.
-Expiry or any change to a bound digest/version/profile/procedure makes it stale.
-Any index watermark or data distribution not explicitly covered by its bound
-digest/range also makes it stale; v0 defines no unmeasured drift tolerance.
+filter-family, quality-profile, and measurement-procedure identities;
+measuredAt, k/query count, zero eligibility violations, full report, thresholds,
+and status `valid`, `stale`, or `measurementRequired`. Expiry is exactly
+`measuredAt + certificationMaxAgeDays` in UTC. Expiry or any change to a bound
+corpus/oracle digest, version, profile, filter family, or procedure makes it
+stale. Any index watermark or data distribution not represented by the bound
+corpus and index-configuration digests also makes it stale; v0 defines no
+unmeasured drift tolerance.
 Stale status remains visible and triggers remeasurement, never silent trust.
 
 Canonical-store and retrieval bindings may be separate; the runtime durable
@@ -954,6 +1016,10 @@ Remedy = {action:String, details:{String:Scalar|[Scalar]}}
 
 Every member is present. `path` is an RFC 6901 pointer into the normalized input
 and is `""` only when no JSON tree/location exists (encoding/document errors).
+For `RunRequest`, Query is the language-addressing root, so query members use
+`/select`, `/afterWrite`, and similar paths without a `/query` prefix;
+execution-control members use `/execution/...` and channel uses `/channel`.
+Ingest paths address the `IngestRequest` directly.
 Messages below are exact sentences; templates substitute only non-secret
 numbers or ids already present in the request. Alternatives are always an array.
 Catalog/enum/output alternatives sort by `unicode-codepoint-v0`; remedy phrases
@@ -1017,6 +1083,11 @@ value without anchors or aliases.`, `Write every mapping member explicitly.`,
 `Keep exactly one occurrence of each key.`, `Submit one document.`, or `Use a
 YAML 1.2 core scalar without a tag.`
 
+Encoding returns one error: the forbidden token whose first source byte occurs
+earliest. If one token establishes several violations, precedence is anchor or
+alias, merge key, duplicate key, custom tag, then document separator. No alias
+is expanded to discover a later error.
+
 `REFERENCE_NOT_AVAILABLE` never includes the submitted reference in its message.
 Thus hidden/nonexistent dataset errors at `/from`, and hidden/nonexistent field
 errors at the same field slot, are JCS-byte-identical.
@@ -1030,7 +1101,7 @@ errors at the same field slot, are JCS-byte-identical.
 | `INSTANT_PRECISION_MISMATCH` | `The instant does not use the field's declared precision.` | required precision |
 | `COLLATION_UNAVAILABLE` | `The source cannot reproduce the catalog's pinned collation.` | source/profile change remedy |
 | `CALENDAR_UNAVAILABLE` | `The source cannot reproduce the catalog's pinned calendar data.` | source/profile change remedy |
-| `MONEY_CURRENCY_MIXED` | `The money aggregate contains more than one currency.` | add `moneyCurrency` dimension phrase |
+| `MONEY_CURRENCY_MIXED` | `The money aggregate contains more than one currency.` | group-by-currency phrase |
 | `POLICY_DENIED` | `The requested operation is not permitted in this channel.` | permitted operations visible in scope |
 | `SCOPE_INVALID` | `The resolved scope cannot be applied to this dataset.` | obtain corrected scope |
 | `SCOPE_EXPIRED` | `The resolved scope has expired.` | obtain a fresh scope |
@@ -1044,14 +1115,16 @@ errors at the same field slot, are JCS-byte-identical.
 Scalar alternatives are generated exactly as follows: scale mismatch uses `Use
 a decimal with at most <scale> fractional digits.`; overflow uses `Use a value
 within the declared precision or integer range.`; instant mismatch names the
-one required precision; mixed money uses `Add a moneyCurrency dimension for
-this field.`. Collation/calendar alternatives name only logical sources
+one required precision; mixed money uses `Group by a catalog field that
+separates currencies.`. Collation/calendar alternatives name only logical sources
 advertising the pinned profile. Safety and deferred alternatives are the exact
 sentences in the table.
 
-Safety probe paths are `/mode` for a query write, `/rawSql` or `/rawPipeline`
-for passthrough, `/where/op` for regex, and `/where/kind` for UDF/expression.
-All safety and deferred errors occur before backend access.
+Safety paths are `/mode` for query modes `insertOnly`, `replace`, `delete`,
+`update`, or `upsert`; `/rawSql` or `/rawPipeline` for passthrough; and the
+actual nested predicate `op`/`kind` pointer under `where`, metric `where`, or
+`having` for regex/UDF/expression. Array indices are preserved. All safety and
+deferred errors occur before backend access.
 
 ### 10.4 Capability, cost, cursor, quality, and receipt codes
 
@@ -1140,6 +1213,11 @@ zero tolerance. Approximate eligibility has zero tolerance before recall is
 computed. Every implemented construct and every refusal code requires a
 fixture. A deferred construct without its `UNSUPPORTED_IN_V0` probe is not
 implemented.
+
+The retrieval corpus harness id `dot-product-descending-int-v1` maps to a v0
+EmbeddingSpec with `metric:"dotProduct"` and `vectorEncoding:"float32"`; all
+bounded integer components are exactly representable. The harness id is not an
+additional model-facing metric spelling.
 
 ## 12. Acceptance gates and explicit open value
 

@@ -11,8 +11,7 @@
   "query": {"version": "0", "mode": "records", "from": "documents", "select": ["documents.id"], "order": [{"by": "documents.id", "dir": "asc"}], "afterWrite": {"receipt": "wr_fixture_009", "require": ["record"], "timeoutMs": 5000}, "take": 10},
   "expected": {
     "outcome": "refusal",
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/afterWrite", "remedy": "Choose a binding certified for afterWrite or remove the freshness requirement explicitly."},
-    "assertions": ["The query is not run unconstrained.", "A ready-looking token does not override the binding's uncertified deployment mode."],
-    "gap": "RFC §§7 and 9 require this refusal and remedy but RFC §10 does not name the code or message."
+    "error": {"code": "FRESHNESS_UNAVAILABLE", "message": "The selected binding cannot certify the requested afterWrite guarantee.", "path": "/afterWrite", "alternatives": ["Choose a binding certified for afterWrite.", "Remove the freshness requirement explicitly."], "remedy": {"action": "chooseAfterWriteBindingOrRemoveRequirement", "details": {"alternatives": ["Choose a binding certified for afterWrite.", "Remove the freshness requirement explicitly."]}}},
+    "assertions": ["The query is not run unconstrained.", "A ready-looking token does not override the binding's uncertified deployment mode."]
   }
 }

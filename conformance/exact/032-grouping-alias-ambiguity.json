@@ -15,8 +15,7 @@
   "expected": {
     "outcome": "refusal",
     "beforeBackend": true,
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/metrics/0/id", "alternatives": "UNDETERMINED_BY_RFC_V0"},
-    "assertions": ["Neither having nor order is bound using adapter-specific alias precedence."],
-    "gap": "The task and brief require this refusal, but RFC §5 does not state output-id uniqueness/namespace rules and RFC §10 does not provide the code or deterministic collision path."
+    "error": {"code": "OUTPUT_ID_COLLISION", "message": "The output id is already used by another dimension or metric.", "path": "/metrics/0/id", "alternatives": ["Choose a unique output id matching [A-Za-z][A-Za-z0-9_]{0,63}."], "remedy": null},
+    "assertions": ["Neither having nor order is bound using adapter-specific alias precedence."]
   }
 }

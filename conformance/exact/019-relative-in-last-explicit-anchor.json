@@ -31,9 +31,8 @@
   "query": {"version": "0", "mode": "records", "from": "events", "select": ["events.id"], "where": {"kind": "predicate", "field": "events.at", "op": "inLast", "amount": 7, "unit": "day"}, "order": [{"by": "events.id", "dir": "asc"}], "take": 10},
   "execution": {"anchor": "2024-03-07T12:00:00Z"},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "outcome": "success",
     "assertions": ["Every execution uses exactly execution.anchor and records it in provenance.", "Changing the machine clock cannot change the result."],
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "gap": "RFC §5 calls the math calendar-owned but does not say whether inLast day is a rolling elapsed duration or whole calendar periods, whether the anchor is included, or the lower/upper inclusivity."
+    "semantic": {"rows": [{"events.id": "anchor"}, {"events.id": "inside"}, {"events.id": "lower"}]}
   }
 }
