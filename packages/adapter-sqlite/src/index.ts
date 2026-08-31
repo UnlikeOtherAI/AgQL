@@ -1,7 +1,7 @@
 export { createSqliteAdapter, SQLITE_PROFILES } from './adapter.ts';
 export { calendarPeriod } from './calendar.ts';
 export { SQLITE_DISTANCE_TOLERANCE } from './execute.ts';
-export { provisionSqliteAdapterStorage } from './ingest.ts';
+export { provisionSqliteAdapterStorage } from './ingest-receipts.ts';
 export type {
   CompiledAggregateQuery,
   CompiledCanonicalIngest,

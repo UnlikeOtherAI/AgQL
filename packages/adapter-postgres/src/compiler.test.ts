@@ -24,6 +24,7 @@ import { Pool } from 'pg';
 
 import { createPostgresAdapter } from './adapter.ts';
 import { compileCalendarPeriodSql } from './calendar-sql.ts';
+import { decodeRows } from './codec.ts';
 import { compileQuery } from './query-compiler.ts';
 import { RuntimeRegistry } from './registry.ts';
 import { ParameterBuilder } from './sql-parameters.ts';
@@ -283,14 +284,16 @@ test('calendar SQL binds timezone, uses explicit grain, and documents Monday wee
     field: instantField,
     grain: 'week',
     timezone: 'Europe/London',
+    weekStart: 'monday',
+    fiscalDayStart: '00:00:00',
     resultKind: 'calendarPeriod',
   }, { registry, dataset: config.datasets[0] ?? assert.fail(), alias: 'd', parameters });
-  assert.match(compiled.start, /date_trunc\('week'.*AT TIME ZONE \$1::text\)/u);
-  assert.match(compiled.endExclusive, /INTERVAL '1 week'/u);
+  assert.match(compiled.localStart, /extract\(isodow/u);
+  assert.match(compiled.endExclusive, /INTERVAL '1 week'.*AT TIME ZONE \$1::text/u);
   assert.deepEqual(parameters.values, ['Europe/London']);
 });
 
-test('frozen AdapterRow gap causes a typed refusal for calendar-period aggregates', () => {
+test('calendar-period aggregates compile and decode result-only CalendarPeriod rows', () => {
   const plan: AggregateLogicalPlan = {
     ...common(),
     mode: 'aggregate',
@@ -301,6 +304,8 @@ test('frozen AdapterRow gap causes a typed refusal for calendar-period aggregate
       field: instantField,
       grain: 'week',
       timezone: 'UTC',
+      weekStart: 'monday',
+      fiscalDayStart: '00:00:00',
       resultKind: 'calendarPeriod',
     }],
     metrics: [{
@@ -311,9 +316,28 @@ test('frozen AdapterRow gap causes a typed refusal for calendar-period aggregate
     order: [{ output: { logicalId: 'week', slot: safe(0) }, direction: 'asc', nulls: 'last' }],
     tieBreak: { kind: 'dimensionTuple', fields: [instantField] },
   };
-  const outcome = compileQuery(plan, registry);
-  assert.equal(outcome.kind, 'refusal');
-  if (outcome.kind === 'refusal') assert.equal(outcome.refusal.code, 'COST_GATE_REFUSAL');
+  const compiled = success(compileQuery(plan, registry));
+  assert.match(compiled.statement.text, /json_build_object\('start'/u);
+  assert.match(compiled.statement.text, /GROUP BY .*json_build_object/su);
+  assert.deepEqual(compiled.outputCodecs[0], {
+    kind: 'calendarPeriod', timezone: 'UTC', grain: 'week',
+  });
+  const decoded = decodeRows(compiled, [[
+    '{"start":"2024-01-01T00:00:00Z","endExclusive":"2024-01-08T00:00:00Z",'
+      + '"timezone":"UTC","grain":"week","label":"2024-W01"}',
+    '2',
+    '1',
+  ]]);
+  assert.deepEqual(decoded?.rows, [[
+    {
+      kind: 'calendarPeriod',
+      value: {
+        start: '2024-01-01T00:00:00Z', endExclusive: '2024-01-08T00:00:00Z',
+        timezone: 'UTC', grain: 'week', label: '2024-W01',
+      },
+    },
+    { kind: 'integer', value: 2 },
+  ]]);
 });
 
 test('semantic exact adds an eligible-set admission probe and disables ANN indexes', () => {

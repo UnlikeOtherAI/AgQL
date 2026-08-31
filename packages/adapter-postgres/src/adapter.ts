@@ -1,7 +1,8 @@
 import { SafeIntegerSchema } from '@agql/schemas';
 
 import { compileEmbeddingMutation, compileCanonicalIngest } from './ingest-compiler.ts';
-import { executeCanonicalIngest, executeEmbeddingMutation } from './ingest-executor.ts';
+import { executeEmbeddingMutation } from './embedding-executor.ts';
+import { executeCanonicalIngest } from './ingest-executor.ts';
 import { compileQuery } from './query-compiler.ts';
 import { executeQuery } from './query-executor.ts';
 import { RuntimeRegistry } from './registry.ts';
@@ -11,6 +12,7 @@ import { observeVisibility } from './visibility.ts';
 
 const RESERVED_PHYSICAL = new Set([
   '_agql_idempotency',
+  '_agql_ingest_results',
   '_agql_receipt_records',
   '_agql_scope_fingerprint',
   '_agql_updated_at',

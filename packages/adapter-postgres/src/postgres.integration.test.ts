@@ -208,6 +208,19 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
         dataset,
         idField,
         scopeFingerprint,
+        scope: {
+          visibility: 'predicate',
+          enforcement: 'mandatoryPushdown',
+          predicates: [{
+            kind: 'list',
+            field: tenantField,
+            op: 'in',
+            values: [
+              { kind: 'text', value: NormalizedTextSchema.parse('a') },
+              { kind: 'text', value: NormalizedTextSchema.parse('b') },
+            ],
+          }],
+        },
         idempotencyKey: `insert-${suffix}`,
         embeddingPolicy: 'catalog',
         records: [{
@@ -232,9 +245,12 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       }));
       const receipt = success(await adapter.canonicalIngest.execute(ingest));
       const replay = success(await adapter.canonicalIngest.execute(ingest));
-      assert.equal(replay.receipt, receipt.receipt);
-      assert.equal(receipt.records[0]?.visibility.record?.state, 'ready');
-      assert.equal(receipt.records[0]?.visibility['embedding:body@1']?.state, 'accepted');
+      assert.equal(replay.writeReceipt.receipt, receipt.writeReceipt.receipt);
+      assert.equal(receipt.writeReceipt.records[0]?.visibility.record?.state, 'ready');
+      assert.equal(
+        receipt.writeReceipt.records[0]?.visibility['embedding:body@1']?.state,
+        'pending',
+      );
 
       for (const [recordId, components] of [
         ['a-1', [1, 0, 0]],
@@ -359,10 +375,14 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       }
 
       const observed = success(await adapter.visibility?.observe({
-        receipt: receipt.receipt,
+        receipt: receipt.writeReceipt.receipt,
         require: ['record', 'embedding:body@1'],
         timeoutMs: safe(250),
         anchor: InstantValueSchema.parse('2026-01-01T00:00:00Z'),
+        scopeFingerprint,
+        scope: ingest.plan.scope,
+        dataset,
+        idField,
       }) ?? assert.fail('Visibility operations are required.'));
       assert.equal(observed.records[0]?.visibility['embedding:body@1']?.state, 'ready');
     });

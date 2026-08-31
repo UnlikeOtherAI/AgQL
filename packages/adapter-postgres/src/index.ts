@@ -1,5 +1,5 @@
 export { createPostgresAdapter } from './adapter.ts';
-export { compileCalendarPeriodSql } from './calendar-sql.ts';
+export { calendarPeriodOutputSql, compileCalendarPeriodSql } from './calendar-sql.ts';
 export { compileQuery } from './query-compiler.ts';
 export { PostgresProvisioner } from './provisioner.ts';
 export { RuntimeRegistry } from './registry.ts';

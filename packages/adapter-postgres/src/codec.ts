@@ -1,4 +1,4 @@
-import type { AdapterRow, TypedValue } from '@agql/contracts';
+import type { AdapterResultValue, AdapterRow, TypedValue } from '@agql/contracts';
 import {
   CanonicalDecimalSchema,
   DateValueSchema,
@@ -21,6 +21,10 @@ function canonicalNumeric(raw: string): string | undefined {
 
 function stringValue(raw: unknown): string | undefined {
   return typeof raw === 'string' ? raw : undefined;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function decodeInteger(raw: unknown): TypedValue | undefined {
@@ -53,7 +57,7 @@ function instantAtPrecision(
   return `${match[1] ?? ''}${(match[2] ?? '').padEnd(digits, '0').slice(0, digits)}Z`;
 }
 
-export function decodeOutput(codec: OutputCodec, raw: unknown): TypedValue | undefined {
+export function decodeOutput(codec: OutputCodec, raw: unknown): AdapterResultValue | undefined {
   if (raw === null) return { kind: 'null', value: null };
   if (codec.kind === 'rank' || codec.kind === 'aggregateInteger'
     || codec.kind === 'integer') return decodeInteger(raw);
@@ -85,6 +89,30 @@ export function decodeOutput(codec: OutputCodec, raw: unknown): TypedValue | und
     const parsed = InstantValueSchema.safeParse(instantAtPrecision(value, codec));
     return parsed.success ? { kind: 'instant', value: parsed.data } : undefined;
   }
+  if (codec.kind === 'calendarPeriod') {
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(value) as unknown;
+    } catch {
+      return undefined;
+    }
+    if (!isRecord(decoded)) return undefined;
+    const start = InstantValueSchema.safeParse(decoded.start);
+    const endExclusive = InstantValueSchema.safeParse(decoded.endExclusive);
+    const { timezone, grain, label } = decoded;
+    if (!start.success || !endExclusive.success || timezone !== codec.timezone
+      || grain !== codec.grain || typeof label !== 'string' || label.length === 0) return undefined;
+    return {
+      kind: 'calendarPeriod',
+      value: {
+        start: start.data,
+        endExclusive: endExclusive.data,
+        timezone,
+        grain: codec.grain,
+        label,
+      },
+    };
+  }
   return undefined;
 }
 
@@ -102,7 +130,7 @@ export function decodeRows(
   const ranks: ReturnType<typeof SafeIntegerSchema.parse>[] = [];
   let total = 0;
   for (const databaseRow of databaseRows) {
-    const decoded: TypedValue[] = [];
+    const decoded: AdapterResultValue[] = [];
     for (let index = 0; index < compiled.outputCodecs.length; index += 1) {
       const codec = compiled.outputCodecs[index] ?? { kind: 'null' };
       const value = decodeOutput(codec, databaseRow[index]);

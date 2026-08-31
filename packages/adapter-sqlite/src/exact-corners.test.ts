@@ -374,6 +374,7 @@ test('count-only aggregates compile and whole-record replacement clears derived 
       dataset,
       idField,
       scopeFingerprint: scopeHash(),
+      scope: scope(),
       idempotencyKey: 'replace-clears-derived',
       embeddingPolicy: 'catalog',
       mode: 'replace',

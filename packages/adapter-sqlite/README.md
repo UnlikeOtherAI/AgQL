@@ -42,30 +42,25 @@ shared exact decimal functions after scoped source selection; averages whose exa
 terminating decimal form refuse rather than round. Money is canonical JSON text with its currency
 checked on reads and exact amount aggregation within the catalog-declared currency. Calendar
 period calculation uses the supplied IANA timezone in adapter code, rather than SQLite UTC date
-functions; Monday is its fixed week start.
+functions. Buckets cross the adapter boundary as `{start,endExclusive,timezone,grain,label}` with
+instant boundaries; civil-time day, fiscal-day, configurable-week, and month boundaries therefore
+preserve DST transitions instead of pretending that a bucket is an instant or fixed duration.
 
-The frozen contracts do not settle comparison/list semantics involving null. This adapter uses a
-two-valued rule consistently in SQLite and compensated aggregate filters: null equals only null,
-is unequal to non-null, ordered comparisons with null are false, and list membership treats null
-as an ordinary explicit member. Whole-record replacement is an atomic delete-plus-insert so
+The adapter uses the RFC's two-valued null rule consistently in SQLite and compensated aggregate
+filters: null equals only null, is unequal to non-null, ordered comparisons with null are false,
+and list membership treats null as an ordinary explicit member. Whole-record replacement is an
+atomic delete-plus-insert so
 omitted columns and stale derived vectors cannot survive the replacement.
 
-## Contract gaps kept explicit
+Canonical ingest receives the same expanded mandatory-pushdown scope used by reads. Inserts check
+their complete candidate row, replacements check both the existing and replacement row, and
+deletes include the scope predicate in the mutation. Batches retain one accepted/refused outcome
+per input record; CAS conflicts do not roll back successful siblings, and only accepted records
+appear in the batch write receipt. Receipt observation distinguishes a non-ready certified state
+from an unavailable guarantee with `AFTER_WRITE_TIMEOUT` and its structured retry remedy.
 
-The frozen v0 contracts leave three required behaviours without a representable adapter result,
-so this package refuses rather than fabricating compatibility data:
+The remaining deliberately unsupported write surface is derived indexing:
 
-- `AdapterRow` accepts only `TypedValue`, which has no `calendarPeriod` variant. Aggregate plans
-  with calendar dimensions calculate their period but return `UNSUPPORTED_PROFILE` before emitting
-  an unrepresentable row.
-- `VisibilityOperations.observe` can return only the restricted `AdapterRefusal` union, which
-  excludes RFC §7's `AFTER_WRITE_TIMEOUT`. This adapter observes immediately-ready `record`
-  visibility and uses `FRESHNESS_UNAVAILABLE` for non-ready or unsupported representations.
-- `CanonicalIngestPlan` contains only a scope fingerprint, not an expanded write-scope predicate,
-  and `WriteReceipt` has no outcome shape for a missing CAS/delete record because every receipt
-  record requires a version. The engine must authorize writes before this adapter boundary; a
-  missing CAS/delete is therefore rejected as a contract-input failure rather than assigned a
-  made-up version.
 - `CanonicalIngestPlan` does not identify derived representations, so its receipt can truthfully
   certify only `record`. `RetrievalIndexMutation` also lacks the dataset and id-field bindings
   needed to locate a SQLite row safely, so `retrieval-index.v0` is deliberately not advertised.
@@ -73,6 +68,6 @@ so this package refuses rather than fabricating compatibility data:
 The contract also does not contain a provisioning facet, indexed-EmbeddingSpec declaration, or
 average scale/rounding rule. This adapter keeps provisioning explicit, treats the resolved vector
 binding as its indexing declaration, and refuses non-terminating exact averages.
-Because `ResolvedValueType.money` fixes one currency on each field, a conforming frozen plan cannot
+Because `ResolvedValueType.money` fixes one currency on each field, a conforming plan cannot
 represent the RFC's mixed-currency aggregate case; stored values with another currency fail the
 binding check before aggregation rather than being silently converted.
