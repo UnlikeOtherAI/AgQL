@@ -1,0 +1,28 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.embedding-permission-compile-refusal",
+  "rfc": ["§4", "§6", "§9", "§10", "§11"],
+  "rule": "A query lacking semanticSearch permission on the selected EmbeddingSpec is refused at compile time before embedding generation or backend access.",
+  "setup": {
+    "catalog": {"dataset": "cases", "idField": "cases.id", "embeddingSpecs": ["public_summary@1", "protected_body@3"], "protectedSourceFields": ["cases.body"]},
+    "policyTemplate": {"select": {"cases.id": true, "cases.body": false}, "semanticSearch": {"public_summary@1": true, "protected_body@3": false}, "lexicalSearch": {"cases.body": false}},
+    "queryTemplate": {"version": "0", "mode": "retrieve", "from": "cases", "search": "{{searchShape}}", "take": "{{take}}"},
+    "backendSentinel": "Any query-embedding call, adapter compile call, or backend call is a violation."
+  },
+  "adversarialIntent": "Request a protected derived representation while keeping ordinary row projection harmless, catching checks that guard fields but forget embedding permissions.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "3c6ef372",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "searchShape", "values": ["semantic protected_body@3 exact", "semantic protected_body@3 approximate", "hybrid protected_body@3 plus cases.body", "semantic hidden-spec-reference"]},
+      {"name": "take", "values": [1, 10, 100]},
+      {"name": "projection", "values": ["id-only", "empty", "id-plus-visible-metadata"]},
+      {"name": "scopeSize", "values": ["empty", "one-partition", "many-partitions"]},
+      {"name": "stateOrder", "values": ["cold", "embedder-warm", "adapter-warm"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["The outcome is a typed compile-time refusal.", "No runtime embedder or backend/adapter method is called.", "A hidden EmbeddingSpec reference is indistinguishable from a nonexistent one.", "The error alternatives enumerate only in-scope permitted EmbeddingSpecs."]},
+  "gap": "RFC §10 does not provide the embedding-permission refusal code, sentence, or common hidden/nonexistent EmbeddingSpec error shape."
+}

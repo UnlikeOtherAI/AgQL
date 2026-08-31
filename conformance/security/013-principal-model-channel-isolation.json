@@ -1,0 +1,27 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.principal-model-channel-isolation",
+  "rfc": ["§6", "§8", "§11", "§12"],
+  "rule": "Principal-only fields and full result rows never enter model-channel payloads, logs, tool context, errors, or previews; principal results require a separately authenticated endpoint.",
+  "setup": {
+    "recordTemplate": {"modelVisible": {"id": "visible-{{caseIndex}}", "summary": "safe"}, "principalOnlyCanaries": ["principal_secret_{{caseIndex}}", "email_{{caseIndex}}@example.invalid", "salary_{{caseIndex}}"]},
+    "hostInstrumentation": ["tool result bytes", "model request context", "model-visible logs", "error serialization", "preview cache"],
+    "operationTemplate": "{{mode}} through {{protocol}} with {{outcome}}"
+  },
+  "adversarialIntent": "Place unique principal-only canaries in rows and failure paths so any channel routing mistake is observable in instrumented host context.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "2e2ac13a",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "mode", "values": ["records", "aggregate", "semantic-exact", "semantic-approximate", "hybrid"]},
+      {"name": "protocol", "values": ["MCP", "HTTP"]},
+      {"name": "outcome", "values": ["success", "typed-refusal", "timeout", "backend-failure"]},
+      {"name": "truncation", "values": ["none", "preview-truncated", "principal-result-large"]},
+      {"name": "authState", "values": ["model-only", "principal-valid", "principal-expired", "principal-wrong-user"]},
+      {"name": "stateOrder", "values": ["cold", "preview-cache-warm", "principal-cache-warm"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["No principal-only canary appears in model tool results or model context under any outcome.", "principalResultAvailable is non-authoritative and contains no principal data.", "The full result is obtainable only through a separately authenticated principal endpoint with the correct user credential.", "MCP and HTTP preserve identical channel policy and identities."]}
+}

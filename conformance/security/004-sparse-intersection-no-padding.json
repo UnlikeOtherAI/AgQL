@@ -1,0 +1,26 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.sparse-intersection-no-padding",
+  "rfc": ["§5", "§6", "§9", "§11"],
+  "rule": "When a sparse eligible intersection has fewer records than take, retrieval returns only those records and never pads from a broader candidate set.",
+  "setup": {
+    "corpus": {"manifest": "../retrieval/manifest.json", "fixture": "../retrieval/fixtures/sparse-intersection.json"},
+    "queryTemplate": {"queryId": "{{queryId}}", "accuracy": "{{accuracy}}", "take": "{{take}}", "additionalTenantScope": "{{tenantScope}}"},
+    "stateOrders": ["corpus-id-order", "reverse-id-order", "eligible-indexed-last", "ineligible-indexed-last", "compacted"]
+  },
+  "adversarialIntent": "Force fewer eligible hits than the requested count so any fill-to-k behavior necessarily reveals an ineligible record.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "9e3779b9",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "queryId", "values": ["q000", "q001", "q002", "q003", "q007", "q015", "q031", "q063"]},
+      {"name": "accuracy", "values": ["exact", "approximate"]},
+      {"name": "take", "values": [5, 10, 25]},
+      {"name": "tenantScope", "values": ["all", "t00-t03", "t04-t07", "t08-t11", "t12-t15"]},
+      {"name": "stateOrder", "values": ["corpus-id-order", "reverse-id-order", "eligible-indexed-last", "ineligible-indexed-last", "compacted"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["Returned ids are a subset of the exact sparse eligible-set oracle intersected with tenantScope.", "Returned count may be lower than take.", "No duplicate or padding id is returned."]}
+}

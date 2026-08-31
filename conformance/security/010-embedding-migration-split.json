@@ -1,0 +1,28 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.embedding-migration-split",
+  "rfc": ["§4", "§7", "§9", "§11"],
+  "rule": "A query requiring spec@2 waits or refuses when spec@2 is unavailable; it never searches spec@1, combines versions, or treats spec@1 readiness as spec@2 readiness.",
+  "setup": {
+    "catalog": {"dataset": "documents", "embeddingSpecs": ["body@1", "body@2"], "activeQuerySpec": "body@2"},
+    "recordTemplate": {"id": "migrating-{{caseIndex}}", "visibility": {"embedding:body@1": "{{spec1State}}", "embedding:body@2": "{{spec2State}}"}, "vectors": {"body@1": "nearest-old-space", "body@2": "{{spec2Vector}}"}},
+    "queryTemplate": {"version": "0", "mode": "retrieve", "from": "documents", "search": {"kind": "semantic", "using": "body@2", "text": "migration", "accuracy": "{{accuracy}}", "quality": "baseline-unset-v0"}, "afterWrite": {"require": ["embedding:body@2"], "timeoutMs": "{{timeoutMs}}"}, "take": 10}
+  },
+  "adversarialIntent": "Keep the old embedding ready and highly relevant while the required new embedding is pending, failed, or absent so version fallback is easy to detect.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "5384540f",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "spec1State", "values": ["ready", "superseded"]},
+      {"name": "spec2State", "values": ["accepted", "pending", "ready", "failed", "superseded", "unindexed"]},
+      {"name": "spec2Vector", "values": ["absent", "far-new-space", "nearest-new-space"]},
+      {"name": "accuracy", "values": ["exact", "approximate"]},
+      {"name": "timeoutMs", "values": [0, 1, 50, 5000]},
+      {"name": "bindingState", "values": ["both-indexes-mounted", "old-only", "new-building", "new-active"]},
+      {"name": "stateOrder", "values": ["cold", "old-cache-warm", "new-cache-warm"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["Every backend search is bound exclusively to body@2.", "If body@2 is not ready/indexed/available, the result waits, times out, or returns a typed refusal.", "body@1 candidates, vectors, scores, and readiness never satisfy the body@2 query.", "Provenance identifies body@2 and its immutable model revision on success."]}
+}

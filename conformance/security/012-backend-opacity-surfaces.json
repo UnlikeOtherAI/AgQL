@@ -1,0 +1,25 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.backend-opacity-surfaces",
+  "rfc": ["§8", "§9", "§10", "§12"],
+  "rule": "Agent-facing success, refusal, explain, provenance, receipt, and timeout surfaces expose no backend dialect, physical table, collection, index, shard, or native identifier.",
+  "setup": {
+    "bindingCanaries": ["physical_table_canary", "index_canary_7f31", "shard-0009", "SELECT_CANARY", "$vectorSearch_canary", "backend://node/internal"],
+    "operationTemplate": "{{surface}} under {{outcome}} with canaries injected into adapter metadata and backend errors"
+  },
+  "adversarialIntent": "Seed recognizable physical names into every adapter diagnostic so accidental passthrough is caught byte-for-byte.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "8ff34781",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "surface", "values": ["records-result", "aggregate-result", "retrieve-result", "compile-refusal", "cost-refusal", "freshness-refusal", "structured-timeout", "write-receipt", "explain", "provenance"]},
+      {"name": "outcome", "values": ["success", "typed-refusal", "timeout", "backend-failure"]},
+      {"name": "adapterShape", "values": ["sql", "document", "vector-index", "split-store"]},
+      {"name": "channel", "values": ["model", "principal", "operator"]},
+      {"name": "stateOrder", "values": ["cold", "error-cache-warm", "plan-cache-warm"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["No binding canary appears in any agent-facing byte stream.", "Logical catalog ids and stable error codes remain available where required.", "Opaque receipt tokens do not decode or pattern-match to canaries.", "Operator-only diagnostics cannot be routed into model context."]}
+}

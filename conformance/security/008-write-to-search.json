@@ -1,0 +1,29 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.write-to-search",
+  "rfc": ["§7", "§9", "§11"],
+  "rule": "A search carrying afterWrite succeeds only after every required representation of the new record is visible to that exact query.",
+  "setup": {
+    "ingestTemplate": {"operation": "{{writeOperation}}", "id": "new-{{caseIndex}}", "idempotencyKey": "security-write-search-{{caseIndex}}", "embeddingSpec": "body@2"},
+    "receiptTemplate": {"require": "{{requiredStates}}", "timeoutMs": "{{timeoutMs}}"},
+    "visibilitySchedule": "{{schedule}}",
+    "queryTemplate": {"mode": "{{mode}}", "searchSpec": "body@2", "afterWrite": "receiptTemplate", "scope": "{{scopeShape}}", "take": 10}
+  },
+  "adversarialIntent": "Let canonical, lexical, and embedding visibility become ready in different orders so any single-watermark shortcut produces a false success.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "1715609d",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "writeOperation", "values": ["insertOnly", "replace"]},
+      {"name": "requiredStates", "values": [["record"], ["record", "lexical"], ["record", "embedding:body@2"], ["record", "lexical", "embedding:body@2"]]},
+      {"name": "schedule", "values": ["record-lexical-embedding", "embedding-record-lexical", "lexical-embedding-record", "embedding-never-ready", "record-failed", "embedding-superseded"]},
+      {"name": "timeoutMs", "values": [0, 1, 50, 5000]},
+      {"name": "mode", "values": ["semantic-exact", "semantic-approximate", "hybrid"]},
+      {"name": "scopeShape", "values": ["record-visible", "record-out-of-scope", "empty-partitions"]},
+      {"name": "stateOrder", "values": ["cold", "receipt-cache-warm", "index-cache-warm"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["Success occurs only after all required states are ready and visible to the query under its scope.", "If the deadline arrives first, the outcome is a structured timeout result.", "A pending, failed, superseded, wrong-spec, or globally-ready-but-query-invisible state never produces success.", "The new record cannot appear before its required state is satisfied."]}
+}

@@ -1,0 +1,27 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.hidden-catalog-probe-shape",
+  "rfc": ["§6", "§10", "§11"],
+  "rule": "Unauthorized and nonexistent catalog references have one indistinguishable error shape throughout records, aggregate, semantic, lexical, and hybrid paths.",
+  "setup": {
+    "catalog": {"visibleDataset": "public", "hiddenDataset": "hidden", "visibleField": "public.id", "hiddenField": "public.secret", "visibleEmbedding": "summary@1", "hiddenEmbedding": "secret@1"},
+    "policy": {"visible": ["public", "public.id", "summary@1"], "hidden": ["hidden", "public.secret", "secret@1"]},
+    "pairedQueryTemplate": {"left": "reference existing hidden {{referenceKind}} in {{mode}}", "right": "reference nonexistent {{referenceKind}} with same token length in {{mode}}"}
+  },
+  "adversarialIntent": "Repeat catalog enumeration guesses across every query path and compare complete result bytes, timings bucket, alternatives, and backend-call trace.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "daa66d2b",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "referenceKind", "values": ["dataset", "select-field", "filter-field", "group-field", "order-field", "aggregate-field", "lexical-field", "embedding-spec", "enum-code"]},
+      {"name": "mode", "values": ["records", "aggregate", "semantic-exact", "semantic-approximate", "hybrid"]},
+      {"name": "tokenShape", "values": ["ascii", "unicode-nfc", "unicode-nfd", "prefix-collision", "maximum-length"]},
+      {"name": "catalogOrder", "values": ["hidden-first", "visible-first", "randomized-seed-order"]},
+      {"name": "stateOrder", "values": ["cold", "negative-cache-warm", "hidden-cache-warm"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["The paired refusal result JCS bytes are identical.", "Enumerated alternatives contain only in-scope catalog keys in one deterministic order.", "Neither query calls a backend.", "Operational timing exposed to the caller is in the same declared bucket; exact nanosecond equality is not required."]},
+  "gap": "RFC §10 does not define the shared hidden/nonexistent code, message, path treatment, alternatives ordering, or a timing-disclosure policy."
+}
