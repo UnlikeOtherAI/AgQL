@@ -51,20 +51,23 @@ generating or inserting any secret.
 ```sh
 cp deploy/.env.example deploy/.env
 chmod 600 deploy/.env
-app_key="$(openssl rand -hex 32)"
+app_key_secret="$(openssl rand -hex 32)"
 receipt_secret="$(openssl rand -hex 32)"
 postgres_password="$(openssl rand -hex 32)"
 sed -i.bak \
-  -e "s|^AGQL_APP_KEYS=$|AGQL_APP_KEYS=${app_key}|" \
-  -e "s|^AGQL_RECEIPT_SECRET=$|AGQL_RECEIPT_SECRET=${receipt_secret}|" \
+  -e "s|^AGQL_APP_KEYS=$|AGQL_APP_KEYS=app-v1:${app_key_secret}|" \
+  -e "s|^AGQL_RECEIPT_SECRET=$|AGQL_RECEIPT_SECRET=receipt-v1:${receipt_secret}|" \
   -e "s|^POSTGRES_PASSWORD=$|POSTGRES_PASSWORD=${postgres_password}|" \
   -e "s|^DATABASE_URL=$|DATABASE_URL=postgresql://agql:${postgres_password}@agql-postgres:5432/agql|" \
   deploy/.env
 rm deploy/.env.bak
 ```
 
-`AGQL_APP_KEYS` accepts a comma-separated key set for rotation. Generate every
-key with `openssl rand -hex 32`; do not reuse the database password or receipt
+`AGQL_APP_KEYS` is a comma-separated set of **`key-id:secret`** entries, so a
+key can be identified in logs and receipts without exposing it — for example
+`app-v1:<secret>,app-v2:<secret>` during rotation. **The bearer token clients
+send is the secret alone, never the `key-id:` prefix.** Generate every secret
+with `openssl rand -hex 32`; do not reuse the database password or the receipt
 secret as an application key. `AGQL_RECEIPT_SECRET` signs execution receipts and
 must remain distinct from all application keys. The starter catalog exposes
 `portfolio`, `starter`, and `work-items` tags, and the example grants all three.
@@ -126,7 +129,8 @@ starter project rows. Without starter data, the same successful response has an
 empty row array, which is still proof that the deployment can answer queries.
 
 ```sh
-app_key="$(awk -F= '$1 == "AGQL_APP_KEYS" { print $2; exit }' deploy/.env | cut -d, -f1)"
+# The bearer token is the secret half of the first key-id:secret entry.
+app_key="$(awk -F= '$1 == "AGQL_APP_KEYS" { print $2; exit }' deploy/.env | cut -d, -f1 | cut -d: -f2-)"
 curl --fail --silent --show-error \
   -X POST https://agql.example.com/mcp \
   -H "Authorization: Bearer ${app_key}" \
