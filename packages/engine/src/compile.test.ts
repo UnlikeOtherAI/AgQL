@@ -7,6 +7,7 @@ import { compileQuery } from './compile.ts';
 import {
   adapterDescriptor,
   binding,
+  catalog,
   catalogWithDocs,
   compileInput,
   recordsQuery,
@@ -77,6 +78,11 @@ test('hidden and nonexistent references have byte-identical refusal shapes', () 
 });
 
 test('dataset capability tags refuse every query mode with the hidden-reference shape', () => {
+  const docs = catalog.datasets.docs;
+  const docsBinding = binding.datasets.docs;
+  if (docs === undefined || docsBinding === undefined) {
+    throw new Error('Fixture catalog and binding must include docs.');
+  }
   const capabilityCatalog = catalogWithDocs((docs) => ({
     ...docs,
     capabilityTags: ['docs:read'],
@@ -121,16 +127,31 @@ test('dataset capability tags refuse every query mode with the hidden-reference 
       alternatives: [],
     });
   }
+
+  const catalogWithVisibleAlternative = {
+    ...catalog,
+    datasets: {
+      docs,
+      restricted: { ...docs, capabilityTags: ['docs:read'] },
+    },
+  };
+  const bindingWithVisibleAlternative = {
+    ...binding,
+    datasets: { ...binding.datasets, restricted: docsBinding },
+  };
   const hidden = compileQuery({
-    ...compileInput(recordsQuery),
-    catalog: capabilityCatalog,
+    ...compileInput({ ...recordsQuery, from: 'restricted' }),
+    catalog: catalogWithVisibleAlternative,
+    binding: bindingWithVisibleAlternative,
     scope: deniedScope,
   });
   const missing = compileQuery({
     ...compileInput({ ...recordsQuery, from: 'missing' }),
-    catalog: capabilityCatalog,
+    catalog: catalogWithVisibleAlternative,
+    binding: bindingWithVisibleAlternative,
     scope: deniedScope,
   });
+  assert.deepEqual(firstError(hidden)?.alternatives, ['docs']);
   assert.equal(canonicalizeJcs(firstError(hidden)), canonicalizeJcs(firstError(missing)));
 });
 

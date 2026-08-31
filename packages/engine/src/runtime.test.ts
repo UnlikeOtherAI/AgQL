@@ -24,7 +24,8 @@ import { assembleResult } from './results.ts';
 import { fuseRrfV0 } from './rrf.ts';
 import {
   adapterDescriptor,
-  catalogWithDocs,
+  binding,
+  catalog,
   compileInput,
   recordsQuery,
   scope,
@@ -98,13 +99,29 @@ test('compile-time policy refusal never invokes the adapter', async () => {
 });
 
 test('dataset capability refusal never invokes the adapter', async () => {
+  const docs = catalog.datasets.docs;
+  const docsBinding = binding.datasets.docs;
+  if (docs === undefined || docsBinding === undefined) {
+    throw new Error('Fixture catalog and binding must include docs.');
+  }
   const result = await executeQuery({
     ...compileInput(recordsQuery),
-    catalog: catalogWithDocs((docs) => ({ ...docs, capabilityTags: ['docs:read'] })),
+    catalog: {
+      ...catalog,
+      datasets: {
+        docs,
+        restricted: { ...docs, capabilityTags: ['docs:read'] },
+      },
+    },
+    binding: {
+      ...binding,
+      datasets: { ...binding.datasets, restricted: docsBinding },
+    },
+    query: { ...recordsQuery, from: 'restricted' },
     scope: { ...scope, capabilities: [] },
   }, adapterThatMustNotRun());
   assert.equal(errorCode(result), 'REFERENCE_NOT_AVAILABLE');
-  if (!result.ok) assert.deepEqual(result.errors[0]?.alternatives, []);
+  if (!result.ok) assert.deepEqual(result.errors[0]?.alternatives, ['docs']);
 });
 test('empty partitions mean nothing visible and require no backend call', async () => {
   const calls = { compile: 0, execute: 0 };

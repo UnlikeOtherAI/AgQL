@@ -23,7 +23,12 @@ import { validateDeploymentLimits } from './limits.ts';
 import { buildAggregatePlan } from './plan-aggregate.ts';
 import { buildRecordsPlan } from './plan-records.ts';
 import { buildRetrievePlan } from './plan-retrieve.ts';
-import { authorizedDataset, authorizedField, boundField } from './policy.ts';
+import {
+  authorizedDataset,
+  authorizedField,
+  availableDatasetReferences,
+  boundField,
+} from './policy.ts';
 import { compileEffectiveFilter } from './predicates.ts';
 import { expandScope } from './scope.ts';
 import type {
@@ -202,7 +207,11 @@ export function compileQuery(input: CompileQueryInput): EngineResult<CompileOutp
   const dataset = catalog.value.datasets[validated.value.document.from];
   const binding = input.binding.datasets[validated.value.document.from];
   if (dataset === undefined || binding === undefined) {
-    return fail(unavailableReference('/from'));
+    return fail(unavailableReference('/from', availableDatasetReferences(
+      catalog.value,
+      input.binding,
+      scope.data,
+    )));
   }
   const scopeFingerprint = fingerprintScope(scope.data);
   const planHash = effectivePlanHash({

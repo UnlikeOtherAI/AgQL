@@ -50,8 +50,7 @@ export interface AgqlErrorBase<C extends ErrorCode> {
 
 /**
  * RFC §6/§10 deliberately gives hidden and nonexistent names one shape.
- * Its alternatives are structurally empty, so this result cannot enumerate hidden vocabulary.
- * The already scope-narrowed catalog documentation is the sole source of name suggestions.
+ * Its alternatives name only vocabulary already visible in the caller's scope.
  */
 export interface ReferenceNotAvailableError
   extends Omit<AgqlErrorBase<'REFERENCE_NOT_AVAILABLE'>, 'alternatives'> {

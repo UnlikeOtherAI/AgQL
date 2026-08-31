@@ -312,7 +312,7 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       }
       const error = responseObject(errors[0]);
       assert.equal(error.code, 'REFERENCE_NOT_AVAILABLE');
-      assert.deepEqual(error.alternatives, []);
+      assert.deepEqual(error.alternatives, ['projects']);
 
       const unavailableExplain = await fetch(`${base}/v0/query/explain`, {
         method: 'POST',
