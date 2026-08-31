@@ -20,10 +20,10 @@
     "@agql/http": "workspace:*",
     "@agql/mcp": "workspace:*",
     "@agql/schemas": "workspace:*",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "tsx": "^4.20.5"
   },
   "devDependencies": {
-    "@types/pg": "^8.15.5",
-    "tsx": "^4.20.5"
+    "@types/pg": "^8.15.5"
   }
 }
