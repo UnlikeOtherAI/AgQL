@@ -1,0 +1,18 @@
+{
+  "format": "agql-receipt-fixture/0.1",
+  "id": "receipts.after-write-unsupported-refusal",
+  "rfc": ["§7", "§9", "§10"],
+  "rule": "An adapter deployment mode that cannot certify afterWrite returns a typed refusal with a remedy instead of ignoring or weakening the freshness request.",
+  "setup": {
+    "binding": {"id": "weak-replica-binding", "writeVisibility": ["unconstrained"], "executionSnapshot": ["none"]},
+    "receipt": "wr_fixture_009",
+    "visibility": {"record": {"state": "ready", "token": "opaque:V1ItMDA5LXJlY29yZA"}}
+  },
+  "query": {"version": "0", "mode": "records", "from": "documents", "select": ["documents.id"], "order": [{"by": "documents.id", "dir": "asc"}], "afterWrite": {"receipt": "wr_fixture_009", "require": ["record"], "timeoutMs": 5000}, "take": 10},
+  "expected": {
+    "outcome": "refusal",
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/afterWrite", "remedy": "Choose a binding certified for afterWrite or remove the freshness requirement explicitly."},
+    "assertions": ["The query is not run unconstrained.", "A ready-looking token does not override the binding's uncertified deployment mode."],
+    "gap": "RFC §§7 and 9 require this refusal and remedy but RFC §10 does not name the code or message."
+  }
+}

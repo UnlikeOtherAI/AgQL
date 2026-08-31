@@ -1,0 +1,42 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.aggregate.calendar-fiscal-day-dst-fall",
+  "rfc": ["§2", "§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "Fiscal-day bucketing must apply a declared local fiscal boundary through a repeated DST hour without double-counting or fixed-duration arithmetic.",
+  "requiresProfile": "aggregate.v0",
+  "catalog": {
+    "version": "cat-exact-017",
+    "calendar": {"timezone": "America/New_York", "timezoneDatabase": "UNDETERMINED_BY_RFC_V0", "weekStart": "monday", "fiscalDayStart": "04:00:00"},
+    "datasets": [{
+      "id": "sales",
+      "description": "Sales around the 2024 New York fall-back transition and a 04:00 fiscal boundary.",
+      "idField": "sales.id",
+      "profiles": ["aggregate.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "sales.id", "description": "Stable sale id.", "kind": "id", "nullable": false},
+        {"id": "sales.at", "description": "UTC sale instant.", "kind": "instant", "precision": "second", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["aggregate.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "fiscal-start", "at": "2024-11-02T08:00:00Z"},
+    {"id": "first-0130", "at": "2024-11-03T05:30:00Z"},
+    {"id": "second-0130", "at": "2024-11-03T06:30:00Z"},
+    {"id": "fiscal-end-minus", "at": "2024-11-03T08:59:59Z"},
+    {"id": "next-fiscal-start", "at": "2024-11-03T09:00:00Z"}
+  ],
+  "query": {"version": "0", "mode": "aggregate", "from": "sales", "dimensions": [{"kind": "timeBucket", "field": "sales.at", "grain": "fiscalDay", "id": "business_day"}], "metrics": [{"id": "n", "op": "count"}], "order": [{"by": "business_day", "dir": "asc"}], "take": 10},
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "assertions": [
+      "Both distinct 01:30 local instants belong to the fiscal day that starts at 2024-11-02 04:00 America/New_York.",
+      "That fiscal bucket contains fiscal-start through fiscal-end-minus and excludes next-fiscal-start.",
+      "The bucket is 25 elapsed hours and is still one calendar fiscal day."
+    ],
+    "semantic": "UNDETERMINED_BY_RFC_V0",
+    "gap": "Fiscal-day awareness appears only in the non-normative brief; RFC v0 defines no fiscal calendar catalog members, fiscalDay grain, ambiguous-local-time rule, or tzdb version."
+  }
+}

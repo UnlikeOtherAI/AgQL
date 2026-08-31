@@ -1,0 +1,25 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.identity.known-source-query-hash",
+  "rfc": ["§3", "§11"],
+  "rule": "sourceQueryHash is SHA-256 over the UTF-8 RFC 8785 serialization of the validated, defaults-materialized query tree.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-030",
+    "datasets": [{"id": "hash_rows", "description": "Rows for a known identity vector.", "idField": "hash_rows.id", "profiles": ["records.v0"], "rowScope": {"kind": "none", "reason": "Public conformance seed."}, "fields": [{"id": "hash_rows.id", "description": "Stable row id.", "kind": "id", "nullable": false}]}]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "row-1"}],
+  "query": {"version": "0", "mode": "records", "from": "hash_rows", "select": ["hash_rows.id"], "where": {"kind": "predicate", "field": "hash_rows.id", "op": "isNotNull"}, "order": [{"by": "hash_rows.id", "dir": "asc"}], "take": 1},
+  "canonicalization": {
+    "defaultsMaterializedTree": {"version": "0", "mode": "records", "from": "hash_rows", "select": ["hash_rows.id"], "where": {"kind": "predicate", "field": "hash_rows.id", "op": "isNotNull"}, "order": [{"by": "hash_rows.id", "dir": "asc"}], "take": 1},
+    "jcsUtf8": "{\"from\":\"hash_rows\",\"mode\":\"records\",\"order\":[{\"by\":\"hash_rows.id\",\"dir\":\"asc\"}],\"select\":[\"hash_rows.id\"],\"take\":1,\"version\":\"0\",\"where\":{\"field\":\"hash_rows.id\",\"kind\":\"predicate\",\"op\":\"isNotNull\"}}"
+  },
+  "expected": {
+    "outcome": "success",
+    "sourceQueryHash": "sha256:1925ad9cf5b7edbfd6b01afb78b9c37c33ad696604aa071c52e33b3f41f8fc0f",
+    "semantic": {"rows": [{"hash_rows.id": "row-1"}]},
+    "assertions": ["No whitespace, input key order, adapter, scope, catalog version, or execution data enters sourceQueryHash."],
+    "gap": "RFC §3 defines hashing but no default table or query JSON Schema. This vector pins the shown defaultsMaterializedTree; whether raw queries acquire additional defaulted members remains unspecified."
+  }
+}

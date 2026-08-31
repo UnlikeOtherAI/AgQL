@@ -1,0 +1,27 @@
+{
+  "format": "agql-retrieval-certification-record/0.1",
+  "id": "certification-shape-v1",
+  "rfc": ["§5", "§8", "§11", "§12"],
+  "rule": "A retrieval quality certification binds corpus, exact configuration, and version, is referenced by result provenance, and is re-measured on drift.",
+  "certification": {
+    "certificationId": "REQUIRED_BY_CERTIFIER",
+    "version": "REQUIRED_MONOTONIC_VERSION",
+    "corpus": {"manifestPath": "manifest.json", "corpusSha256": "REQUIRED_PINNED_SHA256", "oracleFixtureSha256": "REQUIRED_PINNED_SHA256"},
+    "configuration": {
+      "adapterId": "REQUIRED",
+      "adapterVersion": "REQUIRED",
+      "bindingVersion": "REQUIRED",
+      "engineVersion": "REQUIRED",
+      "embeddingSpec": {"id": "fixture-body@1", "modelRevision": "REQUIRED_IMMUTABLE_REVISION"},
+      "indexConfigurationDigest": "REQUIRED_SHA256",
+      "filterFamily": "REQUIRED_FIXTURE_ID",
+      "qualityProfile": "baseline-unset-v0",
+      "measurementProcedure": "recall-at-k-distribution-v1"
+    },
+    "measurement": {"measuredAt": "REQUIRED_RFC3339_UTC_INSTANT", "queryCount": 64, "k": 10, "eligibilityViolations": 0, "report": "REQUIRED_REPORT_CONFORMING_TO_reporting-contract.json"},
+    "thresholds": null,
+    "status": "measurement-required"
+  },
+  "remeasureOnDrift": ["corpus digest", "oracle fixture digest", "adapter version", "binding version", "engine version", "EmbeddingSpec id or immutable model revision", "index configuration digest", "filter family", "quality profile definition", "measurement procedure"],
+  "assertions": ["A stale certification remains visible as stale rather than silently trusted.", "Every approximate retrieval provenance envelope names the applicable certification reference.", "Thresholds stay null until cross-adapter measurements establish them under RFC §11."]
+}

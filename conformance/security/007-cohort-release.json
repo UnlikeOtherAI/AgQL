@@ -1,0 +1,30 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.cohort-release",
+  "rfc": ["§6", "§8", "§11"],
+  "rule": "A per-channel minimum-cohort release policy is applied after eligibility and before any row, group, preview, count, rank, or principal-availability signal is released on that channel.",
+  "setup": {
+    "catalog": {"dataset": "sensitive_events", "idField": "sensitive_events.id", "rowScope": ["sensitive_events.tenant"]},
+    "releasePolicyTemplate": {"channel": "{{channel}}", "minimumCohort": 5},
+    "recordsTemplate": {"eligibleCount": "{{eligibleCount}}", "ineligibleDecoys": 20},
+    "queryTemplate": {"mode": "{{mode}}", "take": "{{take}}", "scope": "{{scopeShape}}", "filter": "{{filterShape}}"}
+  },
+  "adversarialIntent": "Probe immediately below and above the threshold through every result channel so metadata or truncation flags cannot disclose a suppressed cohort.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "78dde6e4",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "eligibleCount", "values": [0, 1, 2, 3, 4, 5, 6, 10]},
+      {"name": "channel", "values": ["model", "principal"]},
+      {"name": "mode", "values": ["records", "aggregate", "semantic-exact", "semantic-approximate", "hybrid"]},
+      {"name": "take", "values": [1, 4, 5, 10]},
+      {"name": "scopeShape", "values": ["one-partition", "many-partitions", "empty"]},
+      {"name": "filterShape", "values": ["none", "single", "sparse-intersection"]},
+      {"name": "stateOrder", "values": ["cold", "threshold-minus-warm", "threshold-plus-warm"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["When eligibleCount < 5, no protected row, group, metric, rank, preview, truncation detail, or principalResultAvailable signal is released on the governed channel.", "When eligibleCount >= 5, release still obeys field policy, scope, and take.", "Ineligible decoys never contribute to cohort size."]},
+  "gap": "RFC §6 names release policies and gives minimumCohort only as an example; it does not define the request/catalog shape, exact suppression result, interaction with groups/channels, or error code."
+}

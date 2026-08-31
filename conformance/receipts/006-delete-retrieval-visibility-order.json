@@ -1,0 +1,19 @@
+{
+  "format": "agql-receipt-fixture/0.1",
+  "id": "receipts.delete-retrieval-visibility-order",
+  "rfc": ["§7", "§9", "§11", "§12"],
+  "rule": "A retrieval query that requires embedding deletion cannot succeed after only canonical record deletion; it succeeds with no deleted hit only after the derived deletion is visible.",
+  "setup": {
+    "dataset": "documents",
+    "existingRecord": {"id": "delete-search", "body": "strongest hit", "vectorRelationToQuery": "identical"},
+    "delete": {"operation": "delete", "id": "delete-search", "idempotencyKey": "receipt-fixture-006"},
+    "receipt": "wr_fixture_006"
+  },
+  "timeline": [
+    {"step": 0, "visibility": {"record": {"state": "accepted"}, "embedding:body@2": {"state": "accepted"}}},
+    {"step": 1, "visibility": {"record": {"state": "ready", "token": "opaque:V1ItMDA2LWRlbGV0ZS1yZWNvcmQ"}, "embedding:body@2": {"state": "accepted"}}},
+    {"step": 2, "visibility": {"record": {"state": "ready", "token": "opaque:V1ItMDA2LWRlbGV0ZS1yZWNvcmQ"}, "embedding:body@2": {"state": "ready", "token": "opaque:V1ItMDA2LWRlbGV0ZS1lbWJlZA"}}}
+  ],
+  "query": {"version": "0", "mode": "retrieve", "from": "documents", "select": ["documents.id"], "search": {"kind": "semantic", "using": "body@2", "text": "strongest hit", "accuracy": "approximate", "quality": "baseline-unset-v0"}, "afterWrite": {"receipt": "wr_fixture_006", "require": ["record", "embedding:body@2"], "timeoutMs": 5000}, "take": 10},
+  "expected": {"attempts": [{"step": 0, "outcome": "not-success"}, {"step": 1, "outcome": "not-success"}, {"step": 2, "outcome": "success", "mustNotContainIds": ["delete-search"]}], "assertions": ["The record-ready token does not stand in for the embedding-deletion token.", "Candidate caches are invalidated consistently with the required state."]}
+}

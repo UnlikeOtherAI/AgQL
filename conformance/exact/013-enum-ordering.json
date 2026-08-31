@@ -1,0 +1,30 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.enum-ordering",
+  "rfc": ["§2", "§4", "§5", "§11"],
+  "rule": "Enum ordering must operate on a specified property of stable codes and never on mutable display labels, but RFC v0 does not define the ordering relation.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-013",
+    "datasets": [{
+      "id": "issues",
+      "description": "Issues whose code, declaration, and label orders disagree.",
+      "idField": "issues.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "issues.id", "description": "Stable issue id.", "kind": "id", "nullable": false},
+        {"id": "issues.severity", "description": "Severity code.", "kind": "enum", "nullable": false, "values": [{"code": "z_low", "label": "Low"}, {"code": "a_high", "label": "High"}, {"code": "m_medium", "label": "Medium"}]}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "i-low", "severity": "z_low"}, {"id": "i-high", "severity": "a_high"}, {"id": "i-medium", "severity": "m_medium"}],
+  "query": {"version": "0", "mode": "records", "from": "issues", "select": ["issues.id", "issues.severity"], "order": [{"by": "issues.severity", "dir": "asc"}, {"by": "issues.id", "dir": "asc"}], "take": 10},
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "semantic": "UNDETERMINED_BY_RFC_V0",
+    "assertions": ["Changing only labels cannot change the order."],
+    "gap": "RFC §2 says the stable code is the value but does not say whether enum ordering is code collation, declaration order, separately declared rank, or forbidden."
+  }
+}

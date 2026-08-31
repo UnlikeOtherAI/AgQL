@@ -1,0 +1,31 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.text-collation-order",
+  "rfc": ["§2", "§4", "§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "Text ordering uses the catalog's declared versioned collation rather than machine locale or backend defaults, but RFC v0 defines no collation vocabulary or algorithm.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-025",
+    "datasets": [{
+      "id": "names",
+      "description": "Strings selected to disagree across collations.",
+      "idField": "names.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "names.id", "description": "Stable name id.", "kind": "id", "nullable": false},
+        {"id": "names.value", "description": "Declared-collation text.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "UNDETERMINED_BY_RFC_V0"}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "ascii-upper", "value": "Z"}, {"id": "ascii-lower", "value": "a"}, {"id": "ring", "value": "Å"}, {"id": "umlaut", "value": "ä"}, {"id": "eszett", "value": "ß"}, {"id": "emoji", "value": "😀"}],
+  "query": {"version": "0", "mode": "records", "from": "names", "select": ["names.id", "names.value"], "order": [{"by": "names.value", "dir": "asc"}, {"by": "names.id", "dir": "asc"}], "take": 10},
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "semantic": "UNDETERMINED_BY_RFC_V0",
+    "assertions": ["Changing process locale cannot change the result.", "An adapter that cannot reproduce the declared collation must refuse."],
+    "gap": "RFC §§2 and 4 require a declared collation version but provide no identifiers, comparison algorithm, Unicode/CLDR version, or refusal code."
+  }
+}

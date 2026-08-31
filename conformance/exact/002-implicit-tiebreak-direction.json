@@ -1,0 +1,31 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.implicit-tiebreak-direction",
+  "rfc": ["§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "The engine must extend an incomplete user ordering to a total order, but RFC v0 does not state the direction of the implicit stable-id key.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-002",
+    "datasets": [{
+      "id": "tickets",
+      "description": "Tickets tied on the user sort key.",
+      "idField": "tickets.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "tickets.id", "description": "Stable ticket id.", "kind": "id", "nullable": false},
+        {"id": "tickets.priority", "description": "Priority value.", "kind": "integer", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "a", "priority": 1}, {"id": "b", "priority": 1}],
+  "query": {"version": "0", "mode": "records", "from": "tickets", "select": ["tickets.id"], "order": [{"by": "tickets.priority", "dir": "asc"}], "take": 2},
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "semantic": "UNDETERMINED_BY_RFC_V0",
+    "assertions": ["Whatever stable-id direction the RFC eventually selects must be applied identically by every adapter and included in the plan identity."],
+    "gap": "RFC §5 requires a stable-id final tie-break but does not define whether an implicit final key is ascending, descending, or inherited from the preceding key."
+  }
+}

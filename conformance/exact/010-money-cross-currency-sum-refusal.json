@@ -1,0 +1,31 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.aggregate.money-cross-currency-sum-refusal",
+  "rfc": ["§2", "§5", "§10", "§11"],
+  "rule": "sum over money containing more than one currency refuses unless an explicit conversion definition exists; it never adds the amounts or silently chooses a currency.",
+  "requiresProfile": "aggregate.v0",
+  "catalog": {
+    "version": "cat-exact-010",
+    "datasets": [{
+      "id": "payments",
+      "description": "Payments in multiple currencies.",
+      "idField": "payments.id",
+      "profiles": ["aggregate.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "payments.id", "description": "Stable payment id.", "kind": "id", "nullable": false},
+        {"id": "payments.amount", "description": "Payment amount and currency.", "kind": "money", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["aggregate.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "p-usd", "amount": {"amount": "10.00", "currency": "USD"}}, {"id": "p-eur", "amount": {"amount": "20.00", "currency": "EUR"}}],
+  "query": {"version": "0", "mode": "aggregate", "from": "payments", "dimensions": [], "metrics": [{"id": "total", "op": "sum", "field": "payments.amount"}], "order": [{"by": "total", "dir": "asc"}], "take": 1},
+  "expected": {
+    "outcome": "refusal",
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/metrics/0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
+    "beforeBackend": false,
+    "assertions": ["No numeric total is returned.", "The rejection is a typed result rather than an exception or transport error."],
+    "gap": "RFC §§2 and 5 mandate refusal but the normative error catalog promised by §10 is absent, so the required machine code, sentence, and alternatives cannot be derived. Whether the mixed currency is known at compile time or only after execution is also unspecified."
+  }
+}

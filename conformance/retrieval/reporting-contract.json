@@ -1,0 +1,31 @@
+{
+  "format": "agql-retrieval-reporting-contract/0.1",
+  "id": "recall-at-k-distribution-v1",
+  "rfc": ["§5", "§11", "§12"],
+  "rule": "Recall quality is published as a distribution with lower-tail quantiles; a bare average is non-conformant and named-profile thresholds remain unset until first cross-adapter measurement.",
+  "eligibilityGate": {
+    "requiredBeforeRecall": true,
+    "checks": ["all returned ids belong to the fixture exact eligible set", "no duplicate ids", "returned count does not exceed k", "no sparse-result padding"],
+    "maximumViolations": 0
+  },
+  "perQuery": {
+    "queryId": "required corpus query id",
+    "k": 10,
+    "exactRelevantCount": "min(k, eligibleCount)",
+    "returnedEligibleCount": "integer",
+    "relevantReturnedCount": "integer",
+    "recall": "canonical decimal string equal to relevantReturnedCount / exactRelevantCount"
+  },
+  "distribution": {
+    "sampleCount": "integer equal to the number of measured corpus queries",
+    "mean": "canonical decimal string",
+    "median": "canonical decimal string; empirical quantile p=0.5",
+    "minimum": "canonical decimal string",
+    "p01": "canonical decimal string at sorted index floor(0.01 * (n - 1))",
+    "p05": "canonical decimal string at sorted index floor(0.05 * (n - 1))",
+    "p10": "canonical decimal string at sorted index floor(0.10 * (n - 1))",
+    "p25": "canonical decimal string at sorted index floor(0.25 * (n - 1))"
+  },
+  "namedQualityProfiles": [{"id": "baseline-unset-v0", "thresholds": null, "status": "awaiting-first-cross-adapter-measurement", "note": "RFC §11 prohibits inventing the threshold before the first cross-adapter measurements."}],
+  "forbiddenReports": ["mean without per-query values and lower-tail quantiles", "threshold inferred from this generator", "recall computed before eligibility passes", "omission of failed or empty approximate queries"]
+}

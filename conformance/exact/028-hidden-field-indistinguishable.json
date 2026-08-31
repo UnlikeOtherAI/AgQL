@@ -1,0 +1,37 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.security.hidden-field-indistinguishable",
+  "rfc": ["§6", "§10", "§11"],
+  "rule": "A reference to an existing but unauthorized field and a reference to a nonexistent field yield one byte-identical error shape.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-028",
+    "datasets": [{
+      "id": "people",
+      "description": "People with a hidden salary field.",
+      "idField": "people.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "people.id", "description": "Stable person id.", "kind": "id", "nullable": false},
+        {"id": "people.name", "description": "Visible name.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"},
+        {"id": "people.salary", "description": "Restricted salary.", "kind": "decimal", "precision": 10, "scale": 2, "nullable": false}
+      ]
+    }]
+  },
+  "policy": {"version": "policy-exact-028", "fields": {"people.id": {"select": true}, "people.name": {"select": true}, "people.salary": {"select": false}}},
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "p-1", "name": "A", "salary": "100.00"}],
+  "queries": {
+    "unauthorized": {"version": "0", "mode": "records", "from": "people", "select": ["people.salary"], "order": [{"by": "people.id", "dir": "asc"}], "take": 1},
+    "nonexistent": {"version": "0", "mode": "records", "from": "people", "select": ["people.favoriteColor"], "order": [{"by": "people.id", "dir": "asc"}], "take": 1}
+  },
+  "expected": {
+    "outcome": "paired-refusal",
+    "beforeBackend": true,
+    "compareWith": {"left": "queries.unauthorized", "right": "queries.nonexistent", "relation": "error-jcs-bytes-equal"},
+    "assertions": ["Neither error message, code, path treatment, nor alternatives reveals that people.salary exists.", "Alternatives contain only in-scope visible field ids."],
+    "errorShape": "UNDETERMINED_BY_RFC_V0",
+    "gap": "The equality requirement is normative, but RFC §10 does not define the shared hidden/nonexistent error code, sentence, path redaction rule, or alternatives ordering."
+  }
+}

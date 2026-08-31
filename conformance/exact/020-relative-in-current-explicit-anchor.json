@@ -1,0 +1,38 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.relative-in-current-explicit-anchor",
+  "rfc": ["§3", "§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "inCurrent uses a calendar period computed from an explicit anchor and declared timezone, not the host's current month or timezone.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-020",
+    "calendar": {"timezone": "Pacific/Kiritimati", "timezoneDatabase": "UNDETERMINED_BY_RFC_V0", "weekStart": "monday", "fiscalDayStart": "00:00:00"},
+    "datasets": [{
+      "id": "events",
+      "description": "Events around a local month boundary in UTC+14.",
+      "idField": "events.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "events.id", "description": "Stable event id.", "kind": "id", "nullable": false},
+        {"id": "events.at", "description": "UTC event instant.", "kind": "instant", "precision": "second", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "feb-end", "at": "2024-02-29T09:59:59Z"},
+    {"id": "mar-start", "at": "2024-02-29T10:00:00Z"},
+    {"id": "anchor", "at": "2024-03-01T00:30:00Z"},
+    {"id": "apr-start", "at": "2024-03-31T10:00:00Z"}
+  ],
+  "query": {"version": "0", "mode": "records", "from": "events", "select": ["events.id"], "where": {"kind": "predicate", "field": "events.at", "op": "inCurrent", "unit": "month"}, "order": [{"by": "events.id", "dir": "asc"}], "take": 10},
+  "execution": {"anchor": "2024-03-01T00:30:00Z"},
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "assertions": ["The anchor is 2024-03-01 14:30 in the catalog timezone.", "The current local month starts at 2024-02-29T10:00:00Z and ends exclusively at 2024-03-31T10:00:00Z.", "mar-start and anchor are eligible; feb-end and apr-start are not."],
+    "semantic": "UNDETERMINED_BY_RFC_V0",
+    "gap": "RFC v0 does not define where timezone/fiscal calendar is declared, the tzdb version, or the exact half-open relative-period rule."
+  }
+}

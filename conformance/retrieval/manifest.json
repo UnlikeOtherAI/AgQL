@@ -1,0 +1,43 @@
+{
+  "format": "agql-retrieval-manifest/1",
+  "rule": "These exact bytes are the pinned retrieval corpus and eligible-set/top-k oracle for RFC §11.",
+  "generatorSpec": "generator-spec.json",
+  "generator": "reference-generator.mjs",
+  "corpus": {
+    "path": "corpora/deterministic-v1-seed-a6c1e57d.json",
+    "sha256": "sha256:a48cb8ecc3cab3e37b1bed7cc60b4cca80df0aeebdfecac150449f268c5f54aa",
+    "records": 1024,
+    "queries": 64,
+    "dimension": 8
+  },
+  "fixtures": [
+    {
+      "path": "fixtures/filter-50.json",
+      "sha256": "sha256:11af9cfd4c2154f133c261436a30060834c447722c53acf0a43f05e8661f18f2",
+      "eligibleCount": 512,
+      "queryCount": 64,
+      "k": 10
+    },
+    {
+      "path": "fixtures/filter-10.json",
+      "sha256": "sha256:7c1fd2c376d690729b0e9244c7417321022af3f04d07ddc7de010a9b6f7a3b99",
+      "eligibleCount": 102,
+      "queryCount": 64,
+      "k": 10
+    },
+    {
+      "path": "fixtures/filter-1.json",
+      "sha256": "sha256:bd17a81f5ce3a70991592accfc133b64c3bd20e9ba3add0f3965d763d652d93e",
+      "eligibleCount": 10,
+      "queryCount": 64,
+      "k": 10
+    },
+    {
+      "path": "fixtures/sparse-intersection.json",
+      "sha256": "sha256:8c022335f7a18d39c22c3499f02d668c7791bea7170305873ddac5be434f6648",
+      "eligibleCount": 4,
+      "queryCount": 64,
+      "k": 10
+    }
+  ]
+}

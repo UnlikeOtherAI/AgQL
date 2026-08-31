@@ -1,0 +1,28 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.runtime-owned-embedding",
+  "rfc": ["§4", "§9", "§11"],
+  "rule": "The runtime-owned embedder is the sole semantic authority; adapters receive vectors and never call backend-native inference.",
+  "setup": {
+    "embeddingSpecTemplate": {"id": "body@{{specVersion}}", "modelRevision": "immutable-{{modelRevision}}"},
+    "runtimeEmbedderSentinel": "Returns a pinned query vector and records exact call arguments.",
+    "backendInferenceSentinel": "Fails the case if invoked.",
+    "queryTemplate": {"mode": "{{mode}}", "using": "body@{{specVersion}}", "text": "{{textShape}}"}
+  },
+  "adversarialIntent": "Advertise a convenient backend inference endpoint with a different model so an adapter that delegates semantics returns plausible but non-conformant results.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "f1bbcdc8",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "specVersion", "values": ["1", "2", "3"]},
+      {"name": "modelRevision", "values": ["rev-a", "rev-b", "sha256-deadbeef"]},
+      {"name": "mode", "values": ["semantic-exact", "semantic-approximate", "hybrid"]},
+      {"name": "textShape", "values": ["ascii", "NFC", "NFD", "empty", "maximum-length"]},
+      {"name": "backendFeature", "values": ["inference-enabled", "inference-required-by-index-api", "inference-disabled"]},
+      {"name": "stateOrder", "values": ["cold", "backend-model-warm", "runtime-model-warm"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["The runtime embedder is called with the resolved EmbeddingSpec and model text exactly once per uncached execution.", "The adapter receives the resulting vector.", "No backend-native inference endpoint is called.", "An adapter that cannot accept the runtime vector refuses the profile."]}
+}

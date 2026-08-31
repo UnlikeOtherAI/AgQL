@@ -1,0 +1,48 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.aggregate.ratio-division-result-kind",
+  "rfc": ["§2", "§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "Integer and decimal aggregate division need a deterministic result kind, scale, precision, and rounding rule; RFC v0 does not define them.",
+  "requiresProfile": "aggregate.v0",
+  "catalog": {
+    "version": "cat-exact-015",
+    "datasets": [{
+      "id": "fractions",
+      "description": "Integer and decimal ratio inputs.",
+      "idField": "fractions.id",
+      "profiles": ["aggregate.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "fractions.id", "description": "Stable row id.", "kind": "id", "nullable": false},
+        {"id": "fractions.intNumerator", "description": "Integer numerator.", "kind": "integer", "nullable": false},
+        {"id": "fractions.intDenominator", "description": "Integer denominator.", "kind": "integer", "nullable": false},
+        {"id": "fractions.decNumerator", "description": "Decimal numerator.", "kind": "decimal", "precision": 8, "scale": 3, "nullable": false},
+        {"id": "fractions.decDenominator", "description": "Decimal denominator.", "kind": "decimal", "precision": 8, "scale": 3, "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["aggregate.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "one", "intNumerator": 1, "intDenominator": 3, "decNumerator": "1.000", "decDenominator": "3.000"}],
+  "query": {
+    "version": "0",
+    "mode": "aggregate",
+    "from": "fractions",
+    "dimensions": [],
+    "metrics": [
+      {"id": "int_n", "op": "sum", "field": "fractions.intNumerator"},
+      {"id": "int_d", "op": "sum", "field": "fractions.intDenominator"},
+      {"id": "int_ratio", "op": "ratio", "numerator": "int_n", "denominator": "int_d"},
+      {"id": "dec_n", "op": "sum", "field": "fractions.decNumerator"},
+      {"id": "dec_d", "op": "sum", "field": "fractions.decDenominator"},
+      {"id": "dec_ratio", "op": "ratio", "numerator": "dec_n", "denominator": "dec_d"}
+    ],
+    "order": [{"by": "int_ratio", "dir": "asc"}],
+    "take": 1
+  },
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "semantic": "UNDETERMINED_BY_RFC_V0",
+    "gap": "RFC §5 fixes only divide-by-zero. It does not specify integer division promotion, ratio result kind, decimal scale/precision propagation, repeating-decimal rounding, or canonical output spelling."
+  }
+}

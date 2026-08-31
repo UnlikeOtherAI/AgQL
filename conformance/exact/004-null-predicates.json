@@ -1,0 +1,33 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.null-predicates",
+  "rfc": ["§2", "§5", "§11"],
+  "rule": "isNull and isNotNull use AgQL null semantics without backend coercion.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-004",
+    "datasets": [{
+      "id": "notes",
+      "description": "Nullable notes.",
+      "idField": "notes.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "notes.id", "description": "Stable note id.", "kind": "id", "nullable": false},
+        {"id": "notes.body", "description": "Optional note body.", "kind": "text", "nullable": true, "normalization": "NFC", "collation": "unicode-codepoint-v0"}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "n-1", "body": null}, {"id": "n-2", "body": ""}, {"id": "n-3", "body": "x"}],
+  "query": {
+    "version": "0",
+    "mode": "records",
+    "from": "notes",
+    "select": ["notes.id", "notes.body"],
+    "where": {"kind": "predicate", "field": "notes.body", "op": "isNull"},
+    "order": [{"by": "notes.id", "dir": "asc"}],
+    "take": 10
+  },
+  "expected": {"outcome": "success", "semantic": {"rows": [{"notes.id": "n-1", "notes.body": null}]}, "assertions": ["The empty string is not null."]}
+}

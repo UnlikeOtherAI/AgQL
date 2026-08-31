@@ -1,0 +1,29 @@
+{
+  "format": "agql-receipt-fixture/0.1",
+  "id": "receipts.after-write-all-required-visible",
+  "rfc": ["§7", "§11", "§12"],
+  "rule": "afterWrite succeeds only after every named required representation is visible to the exact query.",
+  "setup": {
+    "dataset": "documents",
+    "record": {"id": "doc-1", "tenant": "allowed", "body": "new searchable document"},
+    "write": {"operation": "insertOnly", "idempotencyKey": "receipt-fixture-001"},
+    "receipt": "wr_fixture_001",
+    "scope": {"partitions": {"documents.tenant": ["allowed"]}}
+  },
+  "timeline": [
+    {"step": 0, "visibility": {"record": {"state": "accepted"}, "lexical": {"state": "accepted"}, "embedding:body@2": {"state": "accepted"}}},
+    {"step": 1, "visibility": {"record": {"state": "ready", "token": "opaque:V1ItMDAxLXJlY29yZA"}, "lexical": {"state": "accepted"}, "embedding:body@2": {"state": "accepted"}}},
+    {"step": 2, "visibility": {"record": {"state": "ready", "token": "opaque:V1ItMDAxLXJlY29yZA"}, "lexical": {"state": "ready", "token": "opaque:V1ItMDAxLWxleGljYWw"}, "embedding:body@2": {"state": "accepted"}}},
+    {"step": 3, "visibility": {"record": {"state": "ready", "token": "opaque:V1ItMDAxLXJlY29yZA"}, "lexical": {"state": "ready", "token": "opaque:V1ItMDAxLWxleGljYWw"}, "embedding:body@2": {"state": "ready", "token": "opaque:V1ItMDAxLWVtYmVkZGluZw"}}}
+  ],
+  "query": {"version": "0", "mode": "retrieve", "from": "documents", "search": {"kind": "hybrid", "semantic": {"using": "body@2", "text": "searchable", "accuracy": "approximate"}, "lexical": {"field": "documents.body", "text": "searchable"}, "fusion": "rrf-v0", "quality": "baseline-unset-v0"}, "afterWrite": {"receipt": "wr_fixture_001", "require": ["record", "lexical", "embedding:body@2"], "timeoutMs": 5000}, "take": 10},
+  "expected": {
+    "attempts": [
+      {"step": 0, "outcome": "not-success"},
+      {"step": 1, "outcome": "not-success"},
+      {"step": 2, "outcome": "not-success"},
+      {"step": 3, "outcome": "success", "mustContainIds": ["doc-1"]}
+    ],
+    "assertions": ["Readiness of record alone or record plus lexical is insufficient.", "All observed transitions and required states are bound into execution provenance."]
+  }
+}

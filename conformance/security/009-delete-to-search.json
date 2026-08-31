@@ -1,0 +1,28 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.delete-to-search",
+  "rfc": ["§7", "§9", "§11"],
+  "rule": "After a delete receipt's required record and embedding-deletion states, neither records nor retrieval returns the deleted record.",
+  "setup": {
+    "existingRecordTemplate": {"id": "deleted-{{caseIndex}}", "embeddingSpec": "body@2", "vectorRelationToQuery": "identical", "lexicalRelationToQuery": "exact"},
+    "deleteTemplate": {"operation": "delete", "id": "deleted-{{caseIndex}}", "idempotencyKey": "security-delete-search-{{caseIndex}}"},
+    "receiptTemplate": {"require": "{{requiredStates}}", "timeoutMs": "{{timeoutMs}}"},
+    "visibilitySchedule": "{{schedule}}",
+    "queryTemplate": {"mode": "{{mode}}", "afterWrite": "receiptTemplate", "take": 10}
+  },
+  "adversarialIntent": "Keep the deleted row as the strongest semantic and lexical hit while canonical and derived deletion states advance independently.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "b54cda56",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "requiredStates", "values": [["record"], ["record", "lexical"], ["record", "embedding:body@2"], ["record", "lexical", "embedding:body@2"]]},
+      {"name": "schedule", "values": ["record-delete-first", "embedding-delete-first", "lexical-delete-first", "embedding-delete-delayed", "embedding-delete-failed"]},
+      {"name": "timeoutMs", "values": [0, 1, 50, 5000]},
+      {"name": "mode", "values": ["records", "semantic-exact", "semantic-approximate", "hybrid"]},
+      {"name": "stateOrder", "values": ["cold", "candidate-cache-warm", "lexical-cache-warm", "compacted"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["After required record deletion visibility, records mode never returns the id.", "Retrieval requiring embedding:body@2 never succeeds until embedding deletion is visible to that query.", "After all required deletion states, no semantic, lexical, fused, preview, or principal result contains the id.", "A deadline before visibility yields structured timeout, never false success."]}
+}

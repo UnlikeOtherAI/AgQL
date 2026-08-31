@@ -1,0 +1,32 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.hybrid-channel-leak",
+  "rfc": ["§5", "§6", "§8", "§9", "§11"],
+  "rule": "Hybrid semantic, lexical, and fused channels all enforce the same effective eligibility and channel policy before logical content is surfaced.",
+  "setup": {
+    "catalog": {"dataset": "incidents", "idField": "incidents.id", "rowScope": ["incidents.tenant"], "embeddingSpec": "incident@2", "lexicalField": "incidents.body", "fusion": "rrf-v0"},
+    "scopeTemplate": {"partitions": {"incidents.tenant": ["{{allowedTenant}}"]}},
+    "recordsTemplate": [
+      {"id": "semantic-leak-{{caseIndex}}", "tenant": "{{deniedTenant}}", "body": "ordinary", "vectorRelationToQuery": "identical"},
+      {"id": "lexical-leak-{{caseIndex}}", "tenant": "{{deniedTenant}}", "body": "{{needle}} exact exact exact", "vectorRelationToQuery": "far"},
+      {"id": "eligible-{{caseIndex}}", "tenant": "{{allowedTenant}}", "body": "prefix {{needle}} suffix", "vectorRelationToQuery": "medium"}
+    ],
+    "queryTemplate": {"version": "0", "mode": "retrieve", "from": "incidents", "search": {"kind": "hybrid", "semantic": {"using": "incident@2", "text": "{{needle}}", "accuracy": "approximate"}, "lexical": {"field": "incidents.body", "text": "{{needle}}"}, "fusion": "rrf-v0", "quality": "baseline-unset-v0"}, "take": "{{take}}"}
+  },
+  "adversarialIntent": "Give different unauthorized rows first place in each input channel so a leak in either candidate list contaminates fusion.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "b7e15162",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "allowedTenant", "values": ["t0", "t1", "t2", "t3"]},
+      {"name": "deniedTenant", "values": ["t4", "t5", "t6", "t7"]},
+      {"name": "needle", "values": ["literal.*", "[secret]", "%_", "CaseSensitive"]},
+      {"name": "take", "values": [1, 3, 10]},
+      {"name": "channelOrder", "values": ["semantic-first", "lexical-first", "parallel"]},
+      {"name": "stateOrder", "values": ["cold", "warm-semantic", "warm-lexical", "compacted"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["Every semantic candidate, lexical candidate, fused candidate, preview row, and returned id is in allowedTenant.", "semantic-leak and lexical-leak never cross the trust boundary as logical content.", "Backend raw scores are never surfaced."]}
+}

@@ -1,0 +1,18 @@
+{
+  "format": "agql-receipt-fixture/0.1",
+  "id": "receipts.delete-record-before-read",
+  "rfc": ["§7", "§11", "§12"],
+  "rule": "After a delete receipt's record state is ready to a records query, that query cannot return the deleted record.",
+  "setup": {
+    "dataset": "documents",
+    "existingRecord": {"id": "delete-read", "body": "must disappear"},
+    "delete": {"operation": "delete", "id": "delete-read", "idempotencyKey": "receipt-fixture-005"},
+    "receipt": "wr_fixture_005"
+  },
+  "timeline": [
+    {"step": 0, "visibility": {"record": {"state": "accepted"}}},
+    {"step": 1, "visibility": {"record": {"state": "ready", "token": "opaque:V1ItMDA1LWRlbGV0ZS1yZWNvcmQ"}}}
+  ],
+  "query": {"version": "0", "mode": "records", "from": "documents", "select": ["documents.id"], "where": {"kind": "predicate", "field": "documents.id", "op": "eq", "value": "delete-read"}, "order": [{"by": "documents.id", "dir": "asc"}], "afterWrite": {"receipt": "wr_fixture_005", "require": ["record"], "timeoutMs": 5000}, "take": 1},
+  "expected": {"attempts": [{"step": 0, "outcome": "not-success"}, {"step": 1, "outcome": "success", "semantic": {"rows": []}}], "assertions": ["No tombstone or stale canonical row is projected.", "Embedding deletion is not required for this records query."]}
+}

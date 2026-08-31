@@ -1,0 +1,25 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.text-starts-with-literal",
+  "rfc": ["§5", "§9", "§11"],
+  "rule": "startsWith is case-sensitive escaped prefix matching, including characters that backend pattern languages reserve.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-024",
+    "datasets": [{
+      "id": "patterns",
+      "description": "Literal prefix samples.",
+      "idField": "patterns.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "patterns.id", "description": "Stable pattern id.", "kind": "id", "nullable": false},
+        {"id": "patterns.value", "description": "Pattern-like text.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "literal", "value": "[abc] tail"}, {"id": "regex-if-bug", "value": "a tail"}, {"id": "not-prefix", "value": "x [abc]"}, {"id": "case", "value": "[ABC] tail"}],
+  "query": {"version": "0", "mode": "records", "from": "patterns", "select": ["patterns.id"], "where": {"kind": "predicate", "field": "patterns.value", "op": "startsWith", "value": "[abc]"}, "order": [{"by": "patterns.id", "dir": "asc"}], "take": 10},
+  "expected": {"outcome": "success", "semantic": {"rows": [{"patterns.id": "literal"}]}, "assertions": ["Square brackets are literal.", "Comparison is case-sensitive."]}
+}

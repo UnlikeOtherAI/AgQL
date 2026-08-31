@@ -1,0 +1,40 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.errors.deferred-v0-constructs",
+  "rfc": ["§1", "§7", "§10"],
+  "rule": "Every construct explicitly deferred from v0 is recognized as deferred and refused with UNSUPPORTED_IN_V0, never executed, ignored, or given implementation-specific semantics.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-037",
+    "datasets": [
+      {"id": "left_rows", "description": "Primary probe rows.", "idField": "left_rows.id", "profiles": ["records.v0", "aggregate.v0", "retrieve.semantic.v0"], "rowScope": {"kind": "none", "reason": "Public conformance seed."}, "fields": [{"id": "left_rows.id", "description": "Stable row id.", "kind": "id", "nullable": false}, {"id": "left_rows.value", "description": "Probe value.", "kind": "integer", "nullable": false}]},
+      {"id": "right_rows", "description": "Secondary probe rows.", "idField": "right_rows.id", "profiles": ["records.v0"], "rowScope": {"kind": "none", "reason": "Public conformance seed."}, "fields": [{"id": "right_rows.id", "description": "Stable row id.", "kind": "id", "nullable": false}]}
+    ]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0", "aggregate.v0", "retrieve.semantic.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"dataset": "left_rows", "record": {"id": "l-1", "value": 1}}, {"dataset": "right_rows", "record": {"id": "r-1"}}],
+  "cases": [
+    {"name": "query-authored-join", "query": {"version": "0", "mode": "records", "from": "left_rows", "joins": [{"from": "right_rows", "on": {"left": "left_rows.id", "right": "right_rows.id"}}], "select": ["left_rows.id"], "order": [{"by": "left_rows.id", "dir": "asc"}], "take": 1}},
+    {"name": "edge", "query": {"version": "0", "mode": "records", "from": "left_rows", "edges": [{"name": "related"}], "select": ["left_rows.id"], "order": [{"by": "left_rows.id", "dir": "asc"}], "take": 1}},
+    {"name": "nested-query", "query": {"version": "0", "mode": "records", "from": "left_rows", "where": {"kind": "predicate", "field": "left_rows.id", "op": "in", "query": {"version": "0", "mode": "records", "from": "right_rows", "select": ["right_rows.id"], "order": [{"by": "right_rows.id", "dir": "asc"}], "take": 1}}, "select": ["left_rows.id"], "order": [{"by": "left_rows.id", "dir": "asc"}], "take": 1}},
+    {"name": "derive", "query": {"version": "0", "mode": "records", "from": "left_rows", "derive": [{"id": "twice", "expression": "left_rows.value * 2"}], "select": ["twice"], "order": [{"by": "left_rows.id", "dir": "asc"}], "take": 1}},
+    {"name": "merge", "query": {"version": "0", "mode": "merge", "from": "left_rows", "take": 1}},
+    {"name": "percentile", "query": {"version": "0", "mode": "aggregate", "from": "left_rows", "dimensions": [], "metrics": [{"id": "p95", "op": "percentile", "field": "left_rows.value", "p": "0.95"}], "order": [{"by": "p95", "dir": "asc"}], "take": 1}},
+    {"name": "rerank", "query": {"version": "0", "mode": "retrieve", "from": "left_rows", "search": {"kind": "semantic", "using": "body@1", "text": "x", "accuracy": "approximate", "quality": "baseline", "rerank": {"pipeline": "cross-encoder"}}, "take": 1}},
+    {"name": "multi-vector", "query": {"version": "0", "mode": "retrieve", "from": "left_rows", "search": {"kind": "semantic", "using": ["title@1", "body@1"], "text": "x", "accuracy": "approximate", "quality": "baseline"}, "take": 1}},
+    {"name": "materialized-dataset", "query": {"version": "0", "mode": "aggregate", "from": "left_rows", "dimensions": [], "metrics": [{"id": "n", "op": "count"}], "materialize": {"as": "counts"}, "order": [{"by": "n", "dir": "asc"}], "take": 1}},
+    {"name": "artifact", "query": {"version": "0", "mode": "artifact", "from": "left_rows", "take": 1}},
+    {"name": "publication", "query": {"version": "0", "mode": "records", "from": "left_rows", "select": ["left_rows.id"], "publish": {"audience": "public"}, "order": [{"by": "left_rows.id", "dir": "asc"}], "take": 1}},
+    {"name": "federation", "query": {"version": "0", "mode": "records", "from": ["left_rows", "right_rows"], "select": ["left_rows.id"], "order": [{"by": "left_rows.id", "dir": "asc"}], "take": 1}},
+    {"name": "attenuable-credential", "query": {"version": "0", "mode": "records", "from": "left_rows", "credential": {"attenuate": {"rows": 1}}, "select": ["left_rows.id"], "order": [{"by": "left_rows.id", "dir": "asc"}], "take": 1}},
+    {"name": "differential-privacy", "query": {"version": "0", "mode": "aggregate", "from": "left_rows", "dimensions": [], "metrics": [{"id": "n", "op": "count"}], "privacy": {"kind": "differential", "epsilon": "1.0"}, "order": [{"by": "n", "dir": "asc"}], "take": 1}},
+    {"name": "derived-policy-propagation", "query": {"version": "0", "mode": "records", "from": "left_rows", "derive": [{"id": "copy", "field": "left_rows.value", "propagatePolicy": true}], "select": ["copy"], "order": [{"by": "left_rows.id", "dir": "asc"}], "take": 1}}
+  ],
+  "expected": {
+    "outcomePerCase": "refusal",
+    "beforeBackend": true,
+    "error": {"code": "UNSUPPORTED_IN_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "UNDETERMINED_BY_RFC_V0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
+    "assertions": ["The construct is not silently ignored.", "No implementation-specific partial semantics run."],
+    "gap": "RFC §1 fixes the code but does not reserve a wire syntax for most deferred constructs, or define per-construct paths, messages, and legal alternatives. The query members in cases are probe spellings, not a claim that these become future syntax."
+  }
+}

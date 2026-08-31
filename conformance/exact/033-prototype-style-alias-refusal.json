@@ -1,0 +1,22 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.aggregate.prototype-style-alias-refusal",
+  "rfc": ["§5", "§10", "§11"],
+  "brief": ["§5.1"],
+  "rule": "Prototype-polluting output ids such as __proto__ must be refused before planning or object construction.",
+  "requiresProfile": "aggregate.v0",
+  "catalog": {
+    "version": "cat-exact-033",
+    "datasets": [{"id": "orders", "description": "Orders for hostile alias validation.", "idField": "orders.id", "profiles": ["aggregate.v0"], "rowScope": {"kind": "none", "reason": "Public conformance seed."}, "fields": [{"id": "orders.id", "description": "Stable order id.", "kind": "id", "nullable": false}]}]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["aggregate.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "o-1"}],
+  "query": {"version": "0", "mode": "aggregate", "from": "orders", "dimensions": [], "metrics": [{"id": "__proto__", "op": "count"}], "order": [{"by": "__proto__", "dir": "asc"}], "take": 1},
+  "expected": {
+    "outcome": "refusal",
+    "beforeBackend": true,
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/metrics/0/id", "alternatives": "UNDETERMINED_BY_RFC_V0"},
+    "assertions": ["No prototype member is read or written while validating the request."],
+    "gap": "This refusal is required by the task and brief §5.1, but RFC v0 does not normatively reserve prototype-related aliases or define the alias grammar/error."
+  }
+}

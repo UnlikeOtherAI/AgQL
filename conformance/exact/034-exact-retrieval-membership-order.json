@@ -1,0 +1,39 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.retrieve.membership-and-order",
+  "rfc": ["§4", "§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "Exact vector retrieval has deterministic top-k membership and order; equal distances end in stable-id order and raw backend scores are absent.",
+  "requiresProfile": "retrieve.semantic.v0",
+  "catalog": {
+    "version": "cat-exact-034",
+    "embeddingSpecs": [{"id": "body@1", "sourceFields": ["documents.body"], "inputTransform": "fixture-text-v1", "model": {"id": "fixture-axis", "revision": "sha256:fixture-axis-v1"}, "dimension": 2, "metric": "cosine", "vectorEncoding": "float32", "chunking": "none", "privacyClass": "public"}],
+    "datasets": [{
+      "id": "documents",
+      "description": "Documents with seeded derived vectors.",
+      "idField": "documents.id",
+      "profiles": ["retrieve.semantic.v0"],
+      "embeddings": {"body": "body@1"},
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "documents.id", "description": "Stable document id.", "kind": "id", "nullable": false},
+        {"id": "documents.body", "description": "Document body.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["retrieve.semantic.v0", "semanticSearch:body@1"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"record": {"id": "v-a", "body": "axis"}, "derived": {"embedding:body@1": [5, 0]}},
+    {"record": {"id": "v-b", "body": "upper"}, "derived": {"embedding:body@1": [4, 3]}},
+    {"record": {"id": "v-c", "body": "lower"}, "derived": {"embedding:body@1": [4, -3]}},
+    {"record": {"id": "v-d", "body": "vertical"}, "derived": {"embedding:body@1": [0, 5]}},
+    {"record": {"id": "v-e", "body": "opposite"}, "derived": {"embedding:body@1": [-5, 0]}}
+  ],
+  "query": {"version": "0", "mode": "retrieve", "from": "documents", "select": ["documents.id"], "search": {"kind": "semantic", "using": "body@1", "text": "positive x axis", "accuracy": "exact", "quality": "exact-oracle-v0"}, "take": 3},
+  "execution": {"anchor": "2024-01-01T00:00:00Z", "runtimeEmbedder": {"spec": "body@1", "queryVector": [1, 0]}},
+  "expected": {
+    "outcome": "success",
+    "semantic": {"rows": [{"documents.id": "v-a", "rank": 1}, {"documents.id": "v-b", "rank": 2}, {"documents.id": "v-c", "rank": 3}]},
+    "assertions": ["v-b and v-c have equal cosine distance and are ordered by stable id.", "No raw distance or backend score is in the portable result.", "The result declares query determinism as exact and identifies body@1 in provenance."]
+  }
+}

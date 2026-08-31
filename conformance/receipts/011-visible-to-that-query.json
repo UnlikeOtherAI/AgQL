@@ -1,0 +1,19 @@
+{
+  "format": "agql-receipt-fixture/0.1",
+  "id": "receipts.visible-to-that-query",
+  "rfc": ["§7", "§9", "§11", "§12"],
+  "rule": "A globally ready state is insufficient: the required representation must be visible through the exact binding, scope, replica route, and snapshot used by the query.",
+  "setup": {
+    "dataset": "documents",
+    "record": {"id": "route-lag", "tenant": "allowed", "body": "globally indexed"},
+    "receipt": "wr_fixture_011",
+    "queryRoute": "replica-b",
+    "scope": {"partitions": {"documents.tenant": ["allowed"]}}
+  },
+  "timeline": [
+    {"step": 0, "globalVisibility": {"record": "ready", "embedding:body@2": "ready"}, "queryRouteVisibility": {"record": "ready", "embedding:body@2": "accepted"}},
+    {"step": 1, "globalVisibility": {"record": "ready", "embedding:body@2": "ready"}, "queryRouteVisibility": {"record": "ready", "embedding:body@2": "ready"}}
+  ],
+  "query": {"version": "0", "mode": "retrieve", "from": "documents", "search": {"kind": "semantic", "using": "body@2", "text": "indexed", "accuracy": "exact", "quality": "exact-oracle-v0"}, "afterWrite": {"receipt": "wr_fixture_011", "require": ["record", "embedding:body@2"], "timeoutMs": 5000}, "take": 10},
+  "expected": {"attempts": [{"step": 0, "outcome": "not-success"}, {"step": 1, "outcome": "success", "mustContainIds": ["route-lag"]}], "assertions": ["A control-plane or primary-index watermark cannot prove replica-b visibility.", "The execution fingerprint binds the selected binding/adapter and snapshot or watermark."]}
+}

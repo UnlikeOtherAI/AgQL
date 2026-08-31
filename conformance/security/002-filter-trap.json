@@ -1,0 +1,33 @@
+{
+  "format": "agql-security-probe/0.1",
+  "id": "security.filter-trap",
+  "rfc": ["§5", "§6", "§9", "§11"],
+  "rule": "Every retrieval predicate is a hard eligibility condition, not a post-top-k suggestion.",
+  "setup": {
+    "catalog": {"dataset": "documents", "idField": "documents.id", "rowScope": "none-with-reason", "embeddingSpec": "body@1", "filterFields": ["documents.class", "documents.active", "documents.createdAt"]},
+    "recordsTemplate": [
+      {"id": "nearest-wrong-filter-{{caseIndex}}", "class": "{{otherClass}}", "active": "{{otherActive}}", "createdAtRelation": "outside-{{rangePosition}}", "vectorRelationToQuery": "identical"},
+      {"id": "eligible-far-{{caseIndex}}", "class": "{{wantedClass}}", "active": "{{wantedActive}}", "createdAtRelation": "inside", "vectorRelationToQuery": "far"}
+    ],
+    "queryTemplate": {"version": "0", "mode": "retrieve", "from": "documents", "search": {"kind": "semantic", "using": "body@1", "text": "filter trap", "accuracy": "{{accuracy}}", "quality": "baseline-unset-v0"}, "where": {"kind": "and", "items": [{"kind": "predicate", "field": "documents.class", "op": "eq", "value": "{{wantedClass}}"}, {"kind": "predicate", "field": "documents.active", "op": "eq", "value": "{{wantedActive}}"}, {"kind": "and", "items": [{"kind": "predicate", "field": "documents.createdAt", "op": "gte", "value": "2024-01-01T00:00:00Z"}, {"kind": "predicate", "field": "documents.createdAt", "op": "lt", "value": "2024-02-01T00:00:00Z"}]}]}, "take": "{{take}}"}
+  },
+  "adversarialIntent": "Put the best vector just outside one or more filters so prefilter, postfilter-with-underfill, and overfetch implementations are distinguishable.",
+  "expansion": {
+    "prng": "xorshift32-v1",
+    "seedHex": "243f6a88",
+    "caseCount": 20000,
+    "selection": "One nextU32 per dimension in listed order; select values[word % values.length].",
+    "dimensions": [
+      {"name": "wantedClass", "values": ["a", "b", "c", "d"]},
+      {"name": "otherClass", "values": ["w", "x", "y", "z"]},
+      {"name": "wantedActive", "values": [true, false]},
+      {"name": "otherActive", "values": [false, true]},
+      {"name": "rangePosition", "values": ["lower-minus", "upper-exact", "upper-plus"]},
+      {"name": "accuracy", "values": ["exact", "approximate"]},
+      {"name": "take", "values": [1, 4, 10]},
+      {"name": "selectivityClass", "values": ["50", "10", "1", "sparse-intersection"]},
+      {"name": "stateOrder", "values": ["cold", "warm", "compacted"]}
+    ]
+  },
+  "invariant": {"maximumViolations": 0, "failure": "fail-build", "checks": ["Every result satisfies all three predicates.", "The upper instant boundary is exclusive.", "Wrong-filter records never appear as padding or preview rows."]}
+}

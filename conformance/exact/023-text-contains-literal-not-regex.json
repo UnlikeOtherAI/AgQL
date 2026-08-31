@@ -1,0 +1,32 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.text-contains-literal-not-regex",
+  "rfc": ["§5", "§9", "§11"],
+  "rule": "contains treats every character as literal escaped substring data; regex or wildcard metacharacters never execute.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-023",
+    "datasets": [{
+      "id": "messages",
+      "description": "Messages containing pattern metacharacters.",
+      "idField": "messages.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "messages.id", "description": "Stable message id.", "kind": "id", "nullable": false},
+        {"id": "messages.body", "description": "Case-sensitive message text.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "literal", "body": "prefix .* suffix"},
+    {"id": "regex-match-if-bug", "body": "prefix anything suffix"},
+    {"id": "class", "body": "[abc]"},
+    {"id": "anchors", "body": "^$"},
+    {"id": "sql-like", "body": "%_"},
+    {"id": "escape", "body": "\\d+"}
+  ],
+  "query": {"version": "0", "mode": "records", "from": "messages", "select": ["messages.id"], "where": {"kind": "predicate", "field": "messages.body", "op": "contains", "value": ".*"}, "order": [{"by": "messages.id", "dir": "asc"}], "take": 10},
+  "expected": {"outcome": "success", "semantic": {"rows": [{"messages.id": "literal"}]}, "assertions": ["The model string is bound as a native scalar.", "It is not inserted into a regex, LIKE pattern, or evaluable expression."]}
+}

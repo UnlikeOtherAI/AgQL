@@ -1,0 +1,38 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.relative-in-previous-explicit-anchor",
+  "rfc": ["§3", "§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "inPrevious selects the immediately preceding declared calendar period relative to an explicit anchor, independent of locale and clock.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-021",
+    "calendar": {"timezone": "UTC", "weekStart": "monday", "fiscalDayStart": "00:00:00"},
+    "datasets": [{
+      "id": "events",
+      "description": "Events around a Monday-start previous week.",
+      "idField": "events.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "events.id", "description": "Stable event id.", "kind": "id", "nullable": false},
+        {"id": "events.at", "description": "UTC event instant.", "kind": "instant", "precision": "second", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "before", "at": "2024-02-25T23:59:59Z"},
+    {"id": "previous-start", "at": "2024-02-26T00:00:00Z"},
+    {"id": "previous-end-minus", "at": "2024-03-03T23:59:59Z"},
+    {"id": "current-start", "at": "2024-03-04T00:00:00Z"}
+  ],
+  "query": {"version": "0", "mode": "records", "from": "events", "select": ["events.id"], "where": {"kind": "predicate", "field": "events.at", "op": "inPrevious", "unit": "week"}, "order": [{"by": "events.id", "dir": "asc"}], "take": 10},
+  "execution": {"anchor": "2024-03-06T12:34:56Z"},
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "assertions": ["With a Monday week start, previous-start and previous-end-minus are eligible; before and current-start are not.", "The anchor and expanded interval appear in provenance or plan audit data."],
+    "semantic": "UNDETERMINED_BY_RFC_V0",
+    "gap": "RFC v0 does not normatively define week start, interval inclusivity, or the provenance representation of the compiler-expanded interval."
+  }
+}

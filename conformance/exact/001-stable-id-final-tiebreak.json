@@ -1,0 +1,48 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.stable-id-final-tiebreak",
+  "rfc": ["§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "An explicit records ordering ends in the stable id, so equal user sort keys have reproducible order and take membership.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-001",
+    "datasets": [{
+      "id": "tickets",
+      "description": "Tickets used to pin total ordering.",
+      "idField": "tickets.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "tickets.id", "description": "Stable ticket id.", "kind": "id", "nullable": false},
+        {"id": "tickets.priority", "description": "Priority value.", "kind": "integer", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "t-30", "priority": 2},
+    {"id": "t-20", "priority": 2},
+    {"id": "t-10", "priority": 2},
+    {"id": "t-40", "priority": 1}
+  ],
+  "query": {
+    "version": "0",
+    "mode": "records",
+    "from": "tickets",
+    "select": ["tickets.id", "tickets.priority"],
+    "order": [{"by": "tickets.priority", "dir": "desc"}, {"by": "tickets.id", "dir": "asc"}],
+    "take": 3
+  },
+  "expected": {
+    "outcome": "success",
+    "semantic": {
+      "rows": [
+        {"tickets.id": "t-10", "tickets.priority": 2},
+        {"tickets.id": "t-20", "tickets.priority": 2},
+        {"tickets.id": "t-30", "tickets.priority": 2}
+      ]
+    },
+    "assertions": ["The result declares query determinism as exact.", "Repeated executions over the same snapshot have identical JCS bytes."]
+  }
+}

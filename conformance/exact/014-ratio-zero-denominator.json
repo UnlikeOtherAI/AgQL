@@ -1,0 +1,39 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.aggregate.ratio-zero-denominator",
+  "rfc": ["§5", "§11"],
+  "rule": "A ratio whose denominator aggregate is zero returns null, not an exception, infinity, zero, or an omitted group.",
+  "requiresProfile": "aggregate.v0",
+  "catalog": {
+    "version": "cat-exact-014",
+    "datasets": [{
+      "id": "campaigns",
+      "description": "Campaign counters for ratio semantics.",
+      "idField": "campaigns.id",
+      "profiles": ["aggregate.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "campaigns.id", "description": "Stable campaign id.", "kind": "id", "nullable": false},
+        {"id": "campaigns.channel", "description": "Campaign channel.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"},
+        {"id": "campaigns.clicks", "description": "Click count.", "kind": "integer", "nullable": false},
+        {"id": "campaigns.views", "description": "View count.", "kind": "integer", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["aggregate.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "c-1", "channel": "zero", "clicks": 7, "views": 0}],
+  "query": {
+    "version": "0",
+    "mode": "aggregate",
+    "from": "campaigns",
+    "dimensions": [{"kind": "field", "field": "campaigns.channel", "id": "channel"}],
+    "metrics": [
+      {"id": "clicks", "op": "sum", "field": "campaigns.clicks"},
+      {"id": "views", "op": "sum", "field": "campaigns.views"},
+      {"id": "rate", "op": "ratio", "numerator": "clicks", "denominator": "views"}
+    ],
+    "order": [{"by": "channel", "dir": "asc"}],
+    "take": 10
+  },
+  "expected": {"outcome": "success", "semantic": {"groups": [{"channel": "zero", "clicks": 7, "views": 0, "rate": null}]}, "assertions": ["The group is retained.", "The null is a JSON null."]}
+}

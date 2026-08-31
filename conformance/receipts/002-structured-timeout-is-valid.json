@@ -1,0 +1,24 @@
+{
+  "format": "agql-receipt-fixture/0.1",
+  "id": "receipts.structured-timeout-is-valid",
+  "rfc": ["§7", "§10", "§11", "§12"],
+  "rule": "When a required visibility state is not visible by the deadline, a structured timeout result is valid and no success payload is returned.",
+  "setup": {
+    "dataset": "documents",
+    "record": {"id": "doc-timeout", "tenant": "allowed", "body": "embedding remains pending"},
+    "write": {"operation": "insertOnly", "idempotencyKey": "receipt-fixture-002"},
+    "receipt": "wr_fixture_002",
+    "scope": {"partitions": {"documents.tenant": ["allowed"]}}
+  },
+  "timeline": [
+    {"step": 0, "visibility": {"record": {"state": "ready", "token": "opaque:V1ItMDAyLXJlY29yZA"}, "embedding:body@2": {"state": "accepted"}}},
+    {"step": 1, "event": "timeout-deadline", "visibility": {"record": {"state": "ready", "token": "opaque:V1ItMDAyLXJlY29yZA"}, "embedding:body@2": {"state": "accepted"}}}
+  ],
+  "query": {"version": "0", "mode": "retrieve", "from": "documents", "search": {"kind": "semantic", "using": "body@2", "text": "pending", "accuracy": "exact", "quality": "exact-oracle-v0"}, "afterWrite": {"receipt": "wr_fixture_002", "require": ["record", "embedding:body@2"], "timeoutMs": 50}, "take": 10},
+  "expected": {
+    "atStep": 1,
+    "outcome": "structured-timeout",
+    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/afterWrite", "remedy": "UNDETERMINED_BY_RFC_V0"},
+    "assertions": ["The result identifies the unsatisfied embedding:body@2 requirement without exposing backend-native state.", "No result rows or approximate fallback are returned.", "The timeout is counted as a valid contract result, not a transport failure."]
+  }
+}

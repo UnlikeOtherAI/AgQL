@@ -1,0 +1,39 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.relative-in-last-explicit-anchor",
+  "rfc": ["§3", "§5", "§11"],
+  "brief": ["§3.5"],
+  "rule": "inLast reads the explicit logged anchor and never the wall clock.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-019",
+    "calendar": {"timezone": "UTC", "weekStart": "monday", "fiscalDayStart": "00:00:00"},
+    "datasets": [{
+      "id": "events",
+      "description": "Events around a seven-day anchored window.",
+      "idField": "events.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "events.id", "description": "Stable event id.", "kind": "id", "nullable": false},
+        {"id": "events.at", "description": "UTC event instant.", "kind": "instant", "precision": "second", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "before", "at": "2024-02-29T11:59:59Z"},
+    {"id": "lower", "at": "2024-02-29T12:00:00Z"},
+    {"id": "inside", "at": "2024-03-07T11:59:59Z"},
+    {"id": "anchor", "at": "2024-03-07T12:00:00Z"},
+    {"id": "future", "at": "2024-03-07T12:00:01Z"}
+  ],
+  "query": {"version": "0", "mode": "records", "from": "events", "select": ["events.id"], "where": {"kind": "predicate", "field": "events.at", "op": "inLast", "amount": 7, "unit": "day"}, "order": [{"by": "events.id", "dir": "asc"}], "take": 10},
+  "execution": {"anchor": "2024-03-07T12:00:00Z"},
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "assertions": ["Every execution uses exactly execution.anchor and records it in provenance.", "Changing the machine clock cannot change the result."],
+    "semantic": "UNDETERMINED_BY_RFC_V0",
+    "gap": "RFC §5 calls the math calendar-owned but does not say whether inLast day is a rolling elapsed duration or whole calendar periods, whether the anchor is included, or the lower/upper inclusivity."
+  }
+}

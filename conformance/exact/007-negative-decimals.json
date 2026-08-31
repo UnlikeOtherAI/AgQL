@@ -1,0 +1,41 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.negative-decimals",
+  "rfc": ["§2", "§5", "§11"],
+  "rule": "Decimal values are compared numerically and exactly, including negatives; their JSON string wire form must never cause lexicographic or binary-float ordering.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-007",
+    "datasets": [{
+      "id": "balances",
+      "description": "Exact signed decimal balances.",
+      "idField": "balances.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "balances.id", "description": "Stable balance id.", "kind": "id", "nullable": false},
+        {"id": "balances.amount", "description": "Signed fixed-point amount.", "kind": "decimal", "precision": 6, "scale": 2, "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "d-neg-ten", "amount": "-10.00"},
+    {"id": "d-neg-two", "amount": "-2.00"},
+    {"id": "d-neg-half", "amount": "-0.50"},
+    {"id": "d-zero", "amount": "0.00"},
+    {"id": "d-pos", "amount": "0.25"}
+  ],
+  "query": {"version": "0", "mode": "records", "from": "balances", "select": ["balances.id", "balances.amount"], "order": [{"by": "balances.amount", "dir": "asc"}, {"by": "balances.id", "dir": "asc"}], "take": 10},
+  "expected": {
+    "outcome": "success",
+    "semantic": {"rows": [
+      {"balances.id": "d-neg-ten", "balances.amount": "-10.00"},
+      {"balances.id": "d-neg-two", "balances.amount": "-2.00"},
+      {"balances.id": "d-neg-half", "balances.amount": "-0.50"},
+      {"balances.id": "d-zero", "balances.amount": "0.00"},
+      {"balances.id": "d-pos", "balances.amount": "0.25"}
+    ]},
+    "assertions": ["The decimal strings are not ordered by JSON code units.", "No value is converted through a binary float."]
+  }
+}

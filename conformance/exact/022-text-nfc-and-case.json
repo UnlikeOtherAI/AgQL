@@ -1,0 +1,25 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.text-nfc-and-case",
+  "rfc": ["§2", "§5", "§11"],
+  "rule": "Core text equality normalizes to NFC and remains case-sensitive.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-022",
+    "datasets": [{
+      "id": "labels",
+      "description": "Canonically equivalent and case-distinct labels.",
+      "idField": "labels.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "labels.id", "description": "Stable label id.", "kind": "id", "nullable": false},
+        {"id": "labels.value", "description": "NFC text.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "composed", "value": "Café"}, {"id": "decomposed", "value": "Café"}, {"id": "upper", "value": "CAFÉ"}],
+  "query": {"version": "0", "mode": "records", "from": "labels", "select": ["labels.id", "labels.value"], "where": {"kind": "predicate", "field": "labels.value", "op": "eq", "value": "Café"}, "order": [{"by": "labels.id", "dir": "asc"}], "take": 10},
+  "expected": {"outcome": "success", "semantic": {"rows": [{"labels.id": "composed", "labels.value": "Café"}, {"labels.id": "decomposed", "labels.value": "Café"}]}, "assertions": ["The decomposed seed is normalized to NFC at its boundary.", "The upper-case row does not compare equal."]}
+}

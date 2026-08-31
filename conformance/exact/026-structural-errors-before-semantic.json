@@ -1,0 +1,28 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.errors.structural-before-semantic",
+  "rfc": ["§5", "§10", "§11"],
+  "rule": "Validation reports all structural errors before considering semantic errors, deterministically and without calling a backend.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-026",
+    "datasets": [{
+      "id": "items",
+      "description": "Visible items.",
+      "idField": "items.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [{"id": "items.id", "description": "Stable item id.", "kind": "id", "nullable": false}]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [{"id": "i-1"}],
+  "query": {"version": 0, "mode": "records", "from": "items", "select": "items.missing", "where": {"kind": "predicate", "field": "items.missing", "op": "eq", "value": "x"}, "order": "items.id", "take": 0},
+  "expected": {
+    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "beforeBackend": true,
+    "assertions": ["No semantic hidden/missing-field decision is made until every structural error has been returned or repaired.", "The same document yields the same structural error sequence on every adapter."],
+    "structuralErrors": "UNDETERMINED_BY_RFC_V0",
+    "gap": "RFC §10 does not publish the promised error catalog, JSON Schema, structural limit constants, structural error ordering within a batch, or whether all structural errors are one result or sequential repair results."
+  }
+}
