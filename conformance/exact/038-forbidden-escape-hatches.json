@@ -18,8 +18,14 @@
   "expected": {
     "outcomePerCase": "refusal",
     "beforeBackend": true,
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "UNDETERMINED_BY_RFC_V0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
-    "assertions": ["The seed remains unchanged.", "No input string is parsed as backend syntax or executable code."],
-    "gap": "The prohibitions are normative, but RFC §10 does not assign their machine codes or define whether forbidden unknown members are structural errors or UNSUPPORTED_IN_V0."
+    "errorsByCase": {
+      "raw-sql": {"code": "NATIVE_PASSTHROUGH_FORBIDDEN", "message": "Native backend query passthrough is forbidden.", "path": "/rawSql", "alternatives": ["Remove the native-query member."], "remedy": null},
+      "raw-pipeline": {"code": "NATIVE_PASSTHROUGH_FORBIDDEN", "message": "Native backend query passthrough is forbidden.", "path": "/rawPipeline", "alternatives": ["Remove the native-query member."], "remedy": null},
+      "regex": {"code": "REGEX_FORBIDDEN", "message": "Regular-expression predicates are forbidden in AgQL v0.", "path": "/where/op", "alternatives": ["Use contains or startsWith."], "remedy": null},
+      "udf": {"code": "UDF_FORBIDDEN", "message": "User-defined functions are forbidden in AgQL v0.", "path": "/where/kind", "alternatives": ["Use a closed AgQL v0 predicate."], "remedy": null},
+      "expression": {"code": "EVALUABLE_CONSTRUCT_FORBIDDEN", "message": "Evaluable expressions are forbidden in AgQL v0.", "path": "/where/kind", "alternatives": ["Use a closed AgQL v0 predicate."], "remedy": null},
+      "query-write": {"code": "QUERY_WRITE_FORBIDDEN", "message": "The AgQL Query Core cannot perform writes.", "path": "/mode", "alternatives": ["Use the separate Ingest contract."], "remedy": null}
+    },
+    "assertions": ["The seed remains unchanged.", "No input string is parsed as backend syntax or executable code.", "Safety-specific codes take precedence over generic unknown-member errors."]
   }
 }

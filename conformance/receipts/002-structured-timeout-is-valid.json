@@ -18,7 +18,7 @@
   "expected": {
     "atStep": 1,
     "outcome": "structured-timeout",
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/afterWrite", "remedy": "UNDETERMINED_BY_RFC_V0"},
+    "error": {"code": "AFTER_WRITE_TIMEOUT", "message": "The afterWrite deadline elapsed before every required visibility state was observable.", "path": "/afterWrite", "alternatives": ["Retry with the same receipt and requirements."], "remedy": {"action": "retryAfterWrite", "details": {"receipt": "wr_fixture_002", "require": ["embedding:body@2", "record"]}}},
     "assertions": ["The result identifies the unsatisfied embedding:body@2 requirement without exposing backend-native state.", "No result rows or approximate fallback are returned.", "The timeout is counted as a valid contract result, not a transport failure."]
   }
 }

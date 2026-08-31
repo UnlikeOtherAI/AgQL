@@ -21,8 +21,7 @@
   "expected": {
     "outcome": "refusal",
     "beforeBackend": true,
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/select/1", "alternatives": ["items.id"]},
-    "assertions": ["Errors at /select/2, /where/field, and /order/0/by are not returned in this result."],
-    "gap": "The first erroneous array member is unambiguous, but RFC §10 does not name its code or sentence. More generally, 'document order' across object members is not defined relative to source insertion order, schema traversal, or post-JCS key order."
+    "error": {"code": "REFERENCE_NOT_AVAILABLE", "message": "The referenced catalog item is not available in this scope.", "path": "/select/1", "alternatives": ["items.id"], "remedy": null},
+    "assertions": ["Errors at /select/2, /where/field, and /order/0/by are not returned in this result.", "Schema traversal order, not input insertion order or JCS key order, selects /select/1 first."]
   }
 }

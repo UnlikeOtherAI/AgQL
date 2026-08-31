@@ -1,6 +1,6 @@
 # EXPECT: ENCODING_TAG_FORBIDDEN
 # Custom/application tags are outside the profile.
-version: "1"
+version: "0"
 mode: records
 from: orders
 take: !!python/object:int 10

@@ -3,7 +3,7 @@
   "id": "exact.records.null-ordering",
   "rfc": ["§2", "§5", "§11"],
   "brief": ["§3.5"],
-  "rule": "Every backend must map to one AgQL null ordering, but RFC v0 never states where null sorts.",
+  "rule": "Nulls sort last for both directions; v0 has no selectable null-order modifier.",
   "requiresProfile": "records.v0",
   "catalog": {
     "version": "cat-exact-005",
@@ -23,8 +23,7 @@
   "seed": [{"id": "s-null", "value": null}, {"id": "s-zero", "value": 0}, {"id": "s-one", "value": 1}],
   "query": {"version": "0", "mode": "records", "from": "scores", "select": ["scores.id", "scores.value"], "order": [{"by": "scores.value", "dir": "asc"}, {"by": "scores.id", "dir": "asc"}], "take": 10},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "gap": "RFC §§2 and 11 require portable null semantics and a null fixture, but do not define NULLS FIRST/LAST for either direction or syntax for selecting it."
+    "outcome": "success",
+    "semantic": {"rows": [{"scores.id": "s-zero", "scores.value": 0}, {"scores.id": "s-one", "scores.value": 1}, {"scores.id": "s-null", "scores.value": null}]}
   }
 }

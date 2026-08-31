@@ -5,15 +5,14 @@
   "rule": "Visibility state never moves backward; terminal or superseded representations cannot become silently pending or ready again under the same receipt identity.",
   "setup": {"receipt": "wr_fixture_007", "representations": ["record", "lexical", "embedding:body@2"]},
   "traces": [
-    {"name": "ready-path", "states": ["accepted", "ready", "superseded"], "expected": "UNDETERMINED_BY_RFC_V0"},
-    {"name": "failure-path", "states": ["accepted", "failed", "superseded"], "expected": "UNDETERMINED_BY_RFC_V0"},
-    {"name": "pending-path-from-receipt-example", "states": ["accepted", "pending", "ready"], "expected": "UNDETERMINED_BY_RFC_V0"},
+    {"name": "ready-path", "states": ["accepted", "ready", "superseded"], "expected": "valid"},
+    {"name": "failure-path", "states": ["accepted", "failed", "superseded"], "expected": "valid"},
+    {"name": "pending-path-from-receipt-example", "states": ["accepted", "pending", "ready"], "expected": "valid"},
     {"name": "backward-ready-to-accepted", "states": ["accepted", "ready", "accepted"], "expected": "invalid"},
     {"name": "backward-failed-to-ready", "states": ["accepted", "failed", "ready"], "expected": "invalid"},
     {"name": "backward-superseded-to-ready", "states": ["accepted", "ready", "superseded", "ready"], "expected": "invalid"}
   ],
   "expected": {
-    "assertions": ["Every invalid backward trace fails conformance.", "A new representation/version uses a new state identity rather than reviving a superseded one."],
-    "gap": "RFC §7 writes 'accepted → ready | failed → superseded' without parentheses or a transition table, while its receipt example uses pending, a state absent from that chain. It does not say whether ready and failed are both allowed to transition to superseded, or how accepted differs from pending."
+    "assertions": ["Every invalid backward trace fails conformance.", "accepted means durable responsibility and pending means work is scheduled or started; neither satisfies a query.", "Ready and failed may transition only to superseded, which is terminal.", "A new representation/version uses a new state identity rather than reviving a superseded one."]
   }
 }

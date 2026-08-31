@@ -3,7 +3,7 @@
   "id": "exact.records.implicit-tiebreak-direction",
   "rfc": ["§5", "§11"],
   "brief": ["§3.5"],
-  "rule": "The engine must extend an incomplete user ordering to a total order, but RFC v0 does not state the direction of the implicit stable-id key.",
+  "rule": "The engine extends an incomplete user ordering with stable-id ascending.",
   "requiresProfile": "records.v0",
   "catalog": {
     "version": "cat-exact-002",
@@ -23,9 +23,8 @@
   "seed": [{"id": "a", "priority": 1}, {"id": "b", "priority": 1}],
   "query": {"version": "0", "mode": "records", "from": "tickets", "select": ["tickets.id"], "order": [{"by": "tickets.priority", "dir": "asc"}], "take": 2},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "assertions": ["Whatever stable-id direction the RFC eventually selects must be applied identically by every adapter and included in the plan identity."],
-    "gap": "RFC §5 requires a stable-id final tie-break but does not define whether an implicit final key is ascending, descending, or inherited from the preceding key."
+    "outcome": "success",
+    "semantic": {"rows": [{"tickets.id": "a"}, {"tickets.id": "b"}]},
+    "assertions": ["The implicit tickets.id key is ascending and is included in the effective plan identity."]
   }
 }

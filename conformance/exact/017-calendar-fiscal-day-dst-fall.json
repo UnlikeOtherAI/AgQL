@@ -7,7 +7,7 @@
   "requiresProfile": "aggregate.v0",
   "catalog": {
     "version": "cat-exact-017",
-    "calendar": {"timezone": "America/New_York", "timezoneDatabase": "UNDETERMINED_BY_RFC_V0", "weekStart": "monday", "fiscalDayStart": "04:00:00"},
+    "calendar": {"timezone": "America/New_York", "timezoneDatabase": "2024a", "weekStart": "monday", "fiscalDayStart": "04:00:00"},
     "datasets": [{
       "id": "sales",
       "description": "Sales around the 2024 New York fall-back transition and a 04:00 fiscal boundary.",
@@ -30,13 +30,12 @@
   ],
   "query": {"version": "0", "mode": "aggregate", "from": "sales", "dimensions": [{"kind": "timeBucket", "field": "sales.at", "grain": "fiscalDay", "id": "business_day"}], "metrics": [{"id": "n", "op": "count"}], "order": [{"by": "business_day", "dir": "asc"}], "take": 10},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "outcome": "success",
     "assertions": [
       "Both distinct 01:30 local instants belong to the fiscal day that starts at 2024-11-02 04:00 America/New_York.",
       "That fiscal bucket contains fiscal-start through fiscal-end-minus and excludes next-fiscal-start.",
       "The bucket is 25 elapsed hours and is still one calendar fiscal day."
     ],
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "gap": "Fiscal-day awareness appears only in the non-normative brief; RFC v0 defines no fiscal calendar catalog members, fiscalDay grain, ambiguous-local-time rule, or tzdb version."
+    "semantic": {"groups": [{"business_day": {"start": "2024-11-02T08:00:00Z", "endExclusive": "2024-11-03T09:00:00Z", "timezone": "America/New_York", "grain": "fiscalDay", "label": "2024-11-02"}, "n": 4}, {"business_day": {"start": "2024-11-03T09:00:00Z", "endExclusive": "2024-11-04T09:00:00Z", "timezone": "America/New_York", "grain": "fiscalDay", "label": "2024-11-03"}, "n": 1}]}
   }
 }

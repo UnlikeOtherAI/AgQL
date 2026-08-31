@@ -22,8 +22,7 @@
   "execution": {"anchor": "2024-01-01T00:00:00Z", "runtimeEmbedder": {"spec": "body@1", "queryVector": [1, 0]}},
   "expected": {
     "outcome": "refusal",
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/search/accuracy", "alternatives": ["Add a selective where predicate", "Request approximate accuracy if policy permits"]},
-    "assertions": ["No approximate neighbors are returned.", "The remedy identifies how to reduce the eligible set or explicitly request an available tier."],
-    "gap": "RFC §9 mandates a typed exact-scan budget refusal and remedy but RFC §10 does not name its code or sentence, and does not define whether admission counts may call the backend."
+    "error": {"code": "EXACT_SCAN_LIMIT_EXCEEDED", "message": "The exact eligible set exceeds the admitted scan limit.", "path": "/search/accuracy", "alternatives": ["Add a selective where predicate.", "Request approximate accuracy if policy permits."], "remedy": {"action": "narrowEligibleSetOrRequestApproximate", "details": {"limit": 3, "eligibleCount": 4, "alternatives": ["Add a selective where predicate.", "Request approximate accuracy if policy permits."]}}},
+    "assertions": ["The adapter may issue only a pushed-down scalar eligible-count query before this refusal; vector search does not run.", "No approximate neighbors are returned.", "The remedy identifies how to reduce the eligible set or explicitly request an available tier."]
   }
 }

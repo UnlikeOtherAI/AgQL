@@ -7,7 +7,7 @@
   "requiresProfile": "aggregate.v0",
   "catalog": {
     "version": "cat-exact-016",
-    "calendar": {"timezone": "America/New_York", "timezoneDatabase": "UNDETERMINED_BY_RFC_V0", "weekStart": "monday", "fiscalDayStart": "00:00:00"},
+    "calendar": {"timezone": "America/New_York", "timezoneDatabase": "2024a", "weekStart": "monday", "fiscalDayStart": "00:00:00"},
     "datasets": [{
       "id": "observations",
       "description": "Instants around the 2024 New York spring-forward transition.",
@@ -31,13 +31,12 @@
   ],
   "query": {"version": "0", "mode": "aggregate", "from": "observations", "dimensions": [{"kind": "timeBucket", "field": "observations.at", "grain": "day", "id": "day"}], "metrics": [{"id": "n", "op": "count"}], "order": [{"by": "day", "dir": "asc"}], "take": 10},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "outcome": "success",
     "assertions": [
       "The bucket corresponding to local 2024-03-10 contains start, pre-gap, post-gap, and end-minus; it contains neither before nor end.",
       "That bucket's UTC extent is [2024-03-10T05:00:00Z, 2024-03-11T04:00:00Z), which is 23 hours.",
       "The emitted bucket is a calendar-period object with start, endExclusive, and timezone, not a fake instant."
     ],
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "gap": "RFC §2 does not type start/endExclusive, §4 does not define calendar declarations or a timezone database version, and §5 does not define supported grains or bucket labeling."
+    "semantic": {"groups": [{"day": {"start": "2024-03-09T05:00:00Z", "endExclusive": "2024-03-10T05:00:00Z", "timezone": "America/New_York", "grain": "day", "label": "2024-03-09"}, "n": 1}, {"day": {"start": "2024-03-10T05:00:00Z", "endExclusive": "2024-03-11T04:00:00Z", "timezone": "America/New_York", "grain": "day", "label": "2024-03-10"}, "n": 4}, {"day": {"start": "2024-03-11T04:00:00Z", "endExclusive": "2024-03-12T04:00:00Z", "timezone": "America/New_York", "grain": "day", "label": "2024-03-11"}, "n": 1}]}
   }
 }

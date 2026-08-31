@@ -7,7 +7,7 @@
   "requiresProfile": "records.v0",
   "catalog": {
     "version": "cat-exact-020",
-    "calendar": {"timezone": "Pacific/Kiritimati", "timezoneDatabase": "UNDETERMINED_BY_RFC_V0", "weekStart": "monday", "fiscalDayStart": "00:00:00"},
+    "calendar": {"timezone": "Pacific/Kiritimati", "timezoneDatabase": "2024a", "weekStart": "monday", "fiscalDayStart": "00:00:00"},
     "datasets": [{
       "id": "events",
       "description": "Events around a local month boundary in UTC+14.",
@@ -30,9 +30,8 @@
   "query": {"version": "0", "mode": "records", "from": "events", "select": ["events.id"], "where": {"kind": "predicate", "field": "events.at", "op": "inCurrent", "unit": "month"}, "order": [{"by": "events.id", "dir": "asc"}], "take": 10},
   "execution": {"anchor": "2024-03-01T00:30:00Z"},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
+    "outcome": "success",
     "assertions": ["The anchor is 2024-03-01 14:30 in the catalog timezone.", "The current local month starts at 2024-02-29T10:00:00Z and ends exclusively at 2024-03-31T10:00:00Z.", "mar-start and anchor are eligible; feb-end and apr-start are not."],
-    "semantic": "UNDETERMINED_BY_RFC_V0",
-    "gap": "RFC v0 does not define where timezone/fiscal calendar is declared, the tzdb version, or the exact half-open relative-period rule."
+    "semantic": {"rows": [{"events.id": "anchor"}, {"events.id": "mar-start"}]}
   }
 }

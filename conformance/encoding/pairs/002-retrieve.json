@@ -1,5 +1,5 @@
 {
-  "version": "1",
+  "version": "0",
   "mode": "retrieve",
   "from": "incidentNotes",
   "search": { "kind": "semantic", "using": "incident_body", "text": "spoiled stock, fridge or refrigeration problems", "accuracy": "approximate", "quality": "high-recall-v1" },

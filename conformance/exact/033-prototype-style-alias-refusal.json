@@ -15,8 +15,7 @@
   "expected": {
     "outcome": "refusal",
     "beforeBackend": true,
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "/metrics/0/id", "alternatives": "UNDETERMINED_BY_RFC_V0"},
-    "assertions": ["No prototype member is read or written while validating the request."],
-    "gap": "This refusal is required by the task and brief §5.1, but RFC v0 does not normatively reserve prototype-related aliases or define the alias grammar/error."
+    "error": {"code": "OUTPUT_ID_INVALID", "message": "The output id does not use the AgQL v0 safe identifier grammar.", "path": "/metrics/0/id", "alternatives": ["Choose an id matching [A-Za-z][A-Za-z0-9_]{0,63} and not reserved by v0."], "remedy": null},
+    "assertions": ["No prototype member is read or written while validating the request."]
   }
 }

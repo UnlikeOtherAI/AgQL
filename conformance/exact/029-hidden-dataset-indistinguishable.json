@@ -23,7 +23,6 @@
     "beforeBackend": true,
     "compareWith": {"left": "queries.unauthorized", "right": "queries.nonexistent", "relation": "error-jcs-bytes-equal"},
     "assertions": ["The error cannot prove that secret_notes exists.", "Legal alternatives list only public_notes."],
-    "errorShape": "UNDETERMINED_BY_RFC_V0",
-    "gap": "The equality requirement is normative, but the shared catalog-reference error shape is absent from RFC §10."
+    "errorShape": {"code": "REFERENCE_NOT_AVAILABLE", "message": "The referenced catalog item is not available in this scope.", "path": "/from", "alternatives": ["public_notes"], "remedy": null}
   }
 }

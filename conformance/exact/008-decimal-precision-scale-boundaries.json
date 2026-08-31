@@ -3,7 +3,7 @@
   "id": "exact.records.decimal-precision-scale-boundaries",
   "rfc": ["§2", "§4", "§11"],
   "brief": ["§3.3", "§3.5"],
-  "rule": "Decimal precision and scale boundary behavior must be portable, but RFC v0 does not define the catalog syntax, limits, rounding rule, or overflow code.",
+  "rule": "Fixed-scale decimal boundaries normalize only losslessly and reject the first non-zero digit beyond the declared scale at ingest.",
   "requiresProfile": "records.v0",
   "catalog": {
     "version": "cat-exact-008",
@@ -23,8 +23,14 @@
   "seed": [{"id": "max", "value": "999.99"}, {"id": "min", "value": "-999.99"}, {"id": "scale-over", "value": "1.234"}, {"id": "precision-over", "value": "1000.00"}],
   "query": {"version": "0", "mode": "records", "from": "measurements", "select": ["measurements.id", "measurements.value"], "order": [{"by": "measurements.id", "dir": "asc"}], "take": 10},
   "expected": {
-    "outcome": "UNDETERMINED_BY_RFC_V0",
-    "error": {"code": "UNDETERMINED_BY_RFC_V0", "message": "UNDETERMINED_BY_RFC_V0", "path": "UNDETERMINED_BY_RFC_V0", "alternatives": "UNDETERMINED_BY_RFC_V0"},
-    "gap": "RFC §2 names a canonical decimal string but gives neither decimal grammar nor precision/scale constraints; RFC §4 says fields are typed but does not require precision or scale members. It also does not say whether invalid seeded/stored JSON is rejected at ingest, catalog binding, or query read."
+    "outcome": "setup-partial-refusal",
+    "phase": "ingest",
+    "recordOutcomes": [
+      {"seedIndex": 0, "outcome": "accepted", "canonicalValue": "999.99"},
+      {"seedIndex": 1, "outcome": "accepted", "canonicalValue": "-999.99"},
+      {"seedIndex": 2, "outcome": "refused", "error": {"code": "NUMERIC_SCALE_MISMATCH", "message": "The decimal has non-zero digits beyond the declared scale.", "path": "/records/2/value/value", "alternatives": ["Use a decimal with at most 2 fractional digits."], "remedy": null}},
+      {"seedIndex": 3, "outcome": "refused", "error": {"code": "NUMERIC_OVERFLOW", "message": "The exact numeric result exceeds the declared precision or integer range.", "path": "/records/3/value/value", "alternatives": ["Use a value within the declared precision or integer range."], "remedy": null}}
+    ],
+    "assertions": ["999.99 and -999.99 are valid decimal(5,2) boundaries.", "Each invalid record receives its own deterministic ingest outcome; invalid stored data is never deferred to query read."]
   }
 }
