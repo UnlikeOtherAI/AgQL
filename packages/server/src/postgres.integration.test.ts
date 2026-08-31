@@ -242,7 +242,8 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       });
       assert.equal(explained.status, 200);
       const explainedPayload = responseObject(await explained.json());
-      assert.equal(explainedPayload.status, 'ok');
+      // explain accepts a plan; only run returns a result (ExplainPayload vs RunPayload).
+      assert.equal(explainedPayload.status, 'accepted');
 
       const mcpHeaders = headers(key);
       mcpHeaders.set('mcp-protocol-version', MCP_PROTOCOL_VERSION);
@@ -295,7 +296,7 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       const mcpExplainPayload = responseObject(
         responseObject(responseObject(await mcpExplain.json()).result).structuredContent,
       );
-      assert.equal(mcpExplainPayload.status, 'ok');
+      assert.equal(mcpExplainPayload.status, 'accepted');
 
       const unavailable = await fetch(`${base}/v0/query/run`, {
         method: 'POST',
