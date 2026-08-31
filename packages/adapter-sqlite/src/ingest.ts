@@ -108,7 +108,7 @@ function existingReceipt(
 ): WriteReceipt | undefined {
   const row = database.prepare(
     `SELECT receipt FROM ${quoteRuntimeIdentifier(IDEMPOTENCY_TABLE)}`
-      + ' WHERE dataset = ? AND scope_fingerprint = ? AND idempotency_key = ?',
+      + ' WHERE dataset = ? AND scope_fingerprint = ? AND idempotency_key = ? LIMIT 1',
   ).get(plan.dataset.physical, plan.scopeFingerprint, plan.idempotencyKey);
   const id = rowValue(row, 'receipt');
   if (id === undefined) return undefined;
@@ -116,7 +116,7 @@ function existingReceipt(
     throw new TypeError('Stored idempotency receipt id is malformed.');
   }
   const receiptRow = database.prepare(
-    `SELECT payload FROM ${quoteRuntimeIdentifier(RECEIPTS_TABLE)} WHERE receipt = ?`,
+    `SELECT payload FROM ${quoteRuntimeIdentifier(RECEIPTS_TABLE)} WHERE receipt = ? LIMIT 1`,
   ).get(id);
   const payload = rowValue(receiptRow, 'payload');
   if (typeof payload !== 'string') {
@@ -233,14 +233,11 @@ function replaceRecord(
   record: CanonicalRecord,
   version: SafeInteger,
 ): void {
-  const recordValues = recordColumns(plan, record);
-  const assignments = recordValues.columns.map((column) => `${quoteIdentifier(column)} = ?`);
-  assignments.push(`${quoteRuntimeIdentifier(VERSION_COLUMN)} = ?`);
-  assignments.push(`${quoteRuntimeIdentifier(DELETED_COLUMN)} = 0`);
   database.prepare(
-    `UPDATE ${quoteIdentifier(plan.dataset.physical)} SET ${assignments.join(', ')}`
+    `DELETE FROM ${quoteIdentifier(plan.dataset.physical)}`
       + ` WHERE ${quoteIdentifier(plan.idField.physical)} = ?`,
-  ).run(...recordValues.values, version, record.id);
+  ).run(record.id);
+  insertRecord(database, plan, record, version);
 }
 
 function processInsert(
@@ -410,7 +407,8 @@ export function observeVisibility(
   });
   try {
     const row = database.prepare(
-      `SELECT payload FROM ${quoteRuntimeIdentifier(RECEIPTS_TABLE)} WHERE receipt = ?`,
+      `SELECT payload FROM ${quoteRuntimeIdentifier(RECEIPTS_TABLE)}`
+        + ' WHERE receipt = ? LIMIT 1',
     ).get(requirement.receipt);
     const payload = rowValue(row, 'payload');
     if (typeof payload !== 'string') {

@@ -69,6 +69,25 @@ function observe(
   return Promise.resolve(observeVisibility(options.databasePath, requirement));
 }
 
+function assertOptions(options: SqliteAdapterOptions): void {
+  if (options.databasePath === '' || options.databasePath === ':memory:'
+    || options.databasePath.startsWith('file::memory:')) {
+    throw new TypeError('SQLite reference execution requires a non-empty file-backed path.');
+  }
+  if (!Number.isSafeInteger(options.exactScanAdmissionLimit)
+    || options.exactScanAdmissionLimit <= 0) {
+    throw new TypeError('exactScanAdmissionLimit must be a positive safe integer.');
+  }
+  if (options.id === '' || options.version === '') {
+    throw new TypeError('SQLite adapter id and version must be non-empty.');
+  }
+  for (const collation of options.supportedTextCollations) {
+    if (collation.id === '' || collation.version === '') {
+      throw new TypeError('Declared SQLite text collations must have an id and version.');
+    }
+  }
+}
+
 /**
  * Embedded reference binding. It is intentionally an exact-only retrieval adapter: it never
  * approximates or fuses results behind the caller's back.
@@ -76,6 +95,7 @@ function observe(
 export function createSqliteAdapter(
   options: SqliteAdapterOptions,
 ): AdapterContract<typeof SQLITE_PROFILES, SqliteQueryCompiled, CompiledCanonicalIngest> {
+  assertOptions(options);
   return {
     descriptor: {
       id: options.id,

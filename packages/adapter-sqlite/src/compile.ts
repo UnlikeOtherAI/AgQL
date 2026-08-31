@@ -196,6 +196,7 @@ function aggregateCompilation(
   }
   const selected = fields.map((field, index) =>
     `${quoteIdentifier(field.physical)} AS ${quoteRuntimeIdentifier(`f${index}`)}`);
+  if (selected.length === 0) selected.push(`1 AS ${quoteRuntimeIdentifier('bounded_row')}`);
   const where = baseWhere(plan);
   const sql = `SELECT ${selected.join(', ')} FROM ${quoteIdentifier(plan.dataset.physical)}`
     + ` WHERE ${where.sql} LIMIT ?`;
@@ -221,6 +222,22 @@ function semanticCompilation(
       'The SQLite reference adapter implements exact semantic retrieval only.',
       '/search/accuracy',
       'Request exact accuracy or use an approximate retrieval adapter.',
+    );
+  }
+  const bytesPerValue = plan.search.vector.encoding === 'float64'
+    ? 8
+    : plan.search.vector.encoding === 'float32' ? 4 : 1;
+  const expectedBytes = plan.search.vector.encoding === 'binary'
+    ? Math.ceil(plan.search.vector.dimension / 8)
+    : plan.search.vector.dimension * bytesPerValue;
+  if (plan.search.vector.dimension !== plan.search.embedding.dimension
+    || plan.search.vector.encoding !== plan.search.embedding.vectorEncoding
+    || plan.search.vector.bytes.byteLength !== expectedBytes) {
+    return refusal(
+      'EMBEDDING_NOT_INDEXED',
+      'The runtime-owned query vector does not match the resolved indexed EmbeddingSpec.',
+      '/search/vector',
+      'Regenerate the query vector for the resolved EmbeddingSpec.',
     );
   }
   if (plan.search.hardCandidateLimit > options.exactScanAdmissionLimit) {
@@ -268,9 +285,13 @@ function semanticCompilation(
     value: {
       kind: 'semantic',
       plan,
-      countSql: `SELECT COUNT(*) AS ${quoteRuntimeIdentifier('eligible_count')} FROM ${table}`
-        + ` WHERE ${eligibility}`,
-      countParameters: where.parameters,
+      countSql: `SELECT COUNT(*) AS ${quoteRuntimeIdentifier('eligible_count')} FROM (`
+        + `SELECT 1 FROM ${table} WHERE ${eligibility} LIMIT ?`
+        + `) AS ${quoteRuntimeIdentifier('bounded_eligible')}`,
+      countParameters: [
+        ...where.parameters,
+        BigInt(plan.search.hardCandidateLimit) + 1n,
+      ],
       sql: `SELECT ${selected.join(', ')} FROM ${table} WHERE ${eligibility}`
         + ` ORDER BY ${quoteIdentifier(plan.stableId.physical)} COLLATE BINARY ASC LIMIT ?`,
       parameters: [...where.parameters, plan.search.hardCandidateLimit],
@@ -283,6 +304,18 @@ export function compileSqlitePlan(
   plan: QueryPlan,
   options: SqliteAdapterOptions,
 ): AdapterOutcome<SqliteQueryCompiled> {
+  const enforcement: unknown = plan.scope.visibility === 'predicate'
+    ? Reflect.get(plan.scope, 'enforcement')
+    : undefined;
+  if (plan.scope.visibility === 'predicate'
+    && (enforcement !== 'mandatoryPushdown' || plan.scope.predicates.length === 0)) {
+    return refusal(
+      'SCOPE_UNENFORCEABLE',
+      'The resolved scope is not a non-empty mandatory-pushdown predicate.',
+      '/scope',
+      'Recompile the query with an expanded mandatory-pushdown scope.',
+    );
+  }
   switch (plan.profile) {
     case 'records.v0':
       return recordsCompilation(plan, options);
@@ -291,6 +324,7 @@ export function compileSqlitePlan(
     case 'retrieve.semantic.v0':
       return semanticCompilation(plan, options);
   }
+  return compileIneligibleProfile();
 }
 
 export function compileIneligibleProfile(): AdapterOutcome<never> {

@@ -31,12 +31,14 @@ import type { CompiledAggregateQuery, SqliteParameter } from './types.ts';
 type SqliteRow = Readonly<Record<string, null | number | bigint | string | Uint8Array>>;
 type SourceRow = ReadonlyMap<string, TypedValue>;
 
-class AggregateCapabilityError extends Error {}
+class AggregateCapabilityError extends Error {
+  constructor(message: string, readonly path: '/dimensions' | '/metrics' = '/metrics') {
+    super(message);
+  }
+}
 
 interface AggregateGroup {
-  readonly key: string;
-  readonly dimensions: ReadonlyMap<number, TypedValue>;
-  readonly rows: readonly SourceRow[];
+  readonly tieBreak: readonly TypedValue[];
 }
 
 function values(
@@ -140,9 +142,13 @@ function filterMatches(
 function dimensionGroup(
   source: SourceRow,
   compiled: CompiledAggregateQuery,
-): { readonly key: string; readonly values: ReadonlyMap<number, TypedValue> } {
+): {
+  readonly key: string;
+  readonly values: ReadonlyMap<number, TypedValue>;
+  readonly tieBreak: readonly TypedValue[];
+} {
   const dimensions = new Map<number, TypedValue>();
-  const keyParts: string[] = [];
+  const keyParts: TypedValue[] = [];
   for (const dimension of compiled.plan.dimensions) {
     const sourceValueForDimension = sourceValue(source, dimension.field.logicalId);
     if (dimension.kind === 'calendarPeriod') {
@@ -153,12 +159,16 @@ function dimensionGroup(
       calendarPeriod(sourceValueForDimension.value, dimension.timezone, dimension.grain);
       throw new AggregateCapabilityError(
         'Calendar period output is not representable by AdapterExecutionResult.AdapterRow.',
+        '/dimensions',
       );
     }
     dimensions.set(dimension.output.slot, sourceValueForDimension);
-    keyParts.push(typedValueKey(sourceValueForDimension));
+    keyParts.push(sourceValueForDimension);
   }
-  return { key: keyParts.join('\u001f'), values: dimensions };
+  const tieBreak = compiled.plan.tieBreak.kind === 'dimensionTuple'
+    ? compiled.plan.tieBreak.fields.map((field) => sourceValue(source, field.logicalId))
+    : [];
+  return { key: JSON.stringify(keyParts), values: dimensions, tieBreak };
 }
 
 function filteredRows(
@@ -181,15 +191,15 @@ function sumValues(valuesToSum: readonly TypedValue[]): TypedValue {
   const first = valuesToSum[0];
   if (first === undefined) return { kind: 'null', value: null };
   if (first.kind === 'integer') {
-    let sum = 0;
+    let sum = 0n;
     for (const item of valuesToSum) {
       if (item.kind !== 'integer') throw new TypeError('Aggregate field kinds must match.');
-      sum += item.value;
-      if (!Number.isSafeInteger(sum)) {
-        throw new AggregateCapabilityError('Integer sum exceeds safe range.');
-      }
+      sum += BigInt(item.value);
     }
-    return { kind: 'integer', value: SafeIntegerSchema.parse(sum) };
+    if (sum < BigInt(Number.MIN_SAFE_INTEGER) || sum > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new AggregateCapabilityError('Integer sum exceeds safe range.');
+    }
+    return { kind: 'integer', value: SafeIntegerSchema.parse(Number(sum)) };
   }
   if (first.kind === 'decimal') {
     let sum = CanonicalDecimalSchema.parse('0');
@@ -289,7 +299,10 @@ function metricValue(
     throw new AggregateCapabilityError('ratio requires integer or decimal aggregate operands.');
   }
   const ratio = divideDecimalsExactly(numeratorDecimal, denominatorDecimal);
-  if (ratio === undefined) return { kind: 'null', value: null };
+  if (denominatorDecimal === '0') return { kind: 'null', value: null };
+  if (ratio === undefined) {
+    throw new AggregateCapabilityError('Ratio has no terminating decimal form.');
+  }
   return { kind: 'decimal', value: ratio };
 }
 
@@ -377,6 +390,19 @@ function compareOutput(
   return 0;
 }
 
+function compareTieBreak(left: AggregateGroup, right: AggregateGroup): number {
+  for (let index = 0; index < left.tieBreak.length; index += 1) {
+    const leftValue = left.tieBreak[index];
+    const rightValue = right.tieBreak[index];
+    if (leftValue === undefined || rightValue === undefined) {
+      throw new TypeError('Aggregate dimension tie-break shape differs between groups.');
+    }
+    const comparison = compareTypedValues(leftValue, rightValue);
+    if (comparison !== 0) return comparison;
+  }
+  return left.tieBreak.length - right.tieBreak.length;
+}
+
 export function executeAggregate(
   databasePath: string,
   compiled: CompiledAggregateQuery,
@@ -402,32 +428,37 @@ export function executeAggregate(
     }
     const groups = new Map<string, {
       dimensions: ReadonlyMap<number, TypedValue>;
+      tieBreak: readonly TypedValue[];
       rows: SourceRow[];
     }>();
     for (const source of sourceRows(raw, compiled)) {
       const grouping = dimensionGroup(source, compiled);
       const existing = groups.get(grouping.key);
       if (existing === undefined) {
-        groups.set(grouping.key, { dimensions: grouping.values, rows: [source] });
+        groups.set(grouping.key, {
+          dimensions: grouping.values,
+          tieBreak: grouping.tieBreak,
+          rows: [source],
+        });
       } else {
         existing.rows.push(source);
       }
     }
     if (compiled.plan.dimensions.length === 0 && groups.size === 0) {
-      groups.set('', { dimensions: new Map(), rows: [] });
+      groups.set('[]', { dimensions: new Map(), tieBreak: [], rows: [] });
     }
     const results: {
       readonly group: AggregateGroup;
       readonly values: ReadonlyMap<number, TypedValue>;
     }[] = [];
-    for (const [key, group] of groups) {
+    for (const group of groups.values()) {
       const valuesBySlot = new Map<number, TypedValue>(group.dimensions);
       for (const metric of compiled.plan.metrics) {
         valuesBySlot.set(metric.output.slot, metricValue(metric, group.rows));
       }
       if (havingMatches(valuesBySlot, compiled.plan.having)) {
         results.push({
-          group: { key, dimensions: group.dimensions, rows: group.rows },
+          group: { tieBreak: group.tieBreak },
           values: valuesBySlot,
         });
       }
@@ -435,9 +466,7 @@ export function executeAggregate(
     results.sort((left, right) => {
       const ordered = compareOutput(left.values, right.values, compiled);
       if (ordered !== 0) return ordered;
-      if (left.group.key < right.group.key) return -1;
-      if (left.group.key > right.group.key) return 1;
-      return 0;
+      return compareTieBreak(left.group, right.group);
     });
     const truncated = results.length > compiled.plan.take;
     const selected = truncated ? results.slice(0, compiled.plan.take) : results;
@@ -456,7 +485,7 @@ export function executeAggregate(
         refusal: {
           code: 'UNSUPPORTED_PROFILE',
           message: caught.message,
-          path: '/dimensions',
+          path: caught.path,
           alternatives: ['Use an output type representable by the current AdapterContract.'],
           remedy: 'Use field dimensions until AdapterRow adds calendar-period values.',
         },

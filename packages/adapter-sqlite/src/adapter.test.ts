@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -401,7 +400,7 @@ test('canonical ingest provides CAS, idempotency, opaque receipts, and delete vi
     createSchema(temporary.path);
     provisionSqliteAdapterStorage(temporary.path);
     const sqlite = adapter(temporary.path);
-    const id = `new-${randomUUID()}`;
+    const id = 'new-fixed-record';
     const insert: CanonicalIngestPlan = {
       dataset: dataset(),
       idField,

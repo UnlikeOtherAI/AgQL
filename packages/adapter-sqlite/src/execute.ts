@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { DatabaseSync } from 'node:sqlite';
 
 import type { AdapterExecutionResult, AdapterOutcome, TypedValue } from '@agql/contracts';
@@ -11,6 +12,11 @@ import type {
 } from './types.ts';
 
 type SqliteRow = Readonly<Record<string, null | number | bigint | string | Uint8Array>>;
+
+export const SQLITE_DISTANCE_TOLERANCE = {
+  absolute: 1e-12,
+  relative: 1e-12,
+} as const;
 
 function rows(
   database: DatabaseSync,
@@ -177,10 +183,18 @@ function rankedOrder(
       if (metric === 'euclidean') return left.score < right.score ? -1 : 1;
       return left.score > right.score ? -1 : 1;
     }
-    if (left.id < right.id) return -1;
-    if (left.id > right.id) return 1;
-    return 0;
+    return Buffer.compare(Buffer.from(left.id, 'utf8'), Buffer.from(right.id, 'utf8'));
   };
+}
+
+function embeddingIsIndexed(
+  database: DatabaseSync,
+  compiled: CompiledSemanticQuery,
+): boolean {
+  const row = database.prepare(
+    'SELECT 1 AS present FROM pragma_table_xinfo(?) WHERE name = ? LIMIT 1',
+  ).get(compiled.plan.dataset.physical, compiled.plan.search.embedding.physical);
+  return row !== undefined;
 }
 
 export function executeSemantic(
@@ -188,6 +202,29 @@ export function executeSemantic(
   compiled: CompiledSemanticQuery,
 ): AdapterOutcome<AdapterExecutionResult> {
   return databasePathExecution(databasePath, (database) => {
+    if (compiled.plan.scope.visibility === 'nothing') {
+      return {
+        kind: 'success',
+        value: {
+          rows: [],
+          ranks: [],
+          truncated: false,
+          snapshot: { kind: 'none' },
+        },
+      };
+    }
+    if (!embeddingIsIndexed(database, compiled)) {
+      return {
+        kind: 'refusal',
+        refusal: {
+          code: 'EMBEDDING_NOT_INDEXED',
+          message: 'The resolved EmbeddingSpec has no indexed SQLite column for this source.',
+          path: '/search/embedding',
+          alternatives: ['Index the resolved EmbeddingSpec.', 'Use an indexed EmbeddingSpec.'],
+          remedy: 'Populate the catalog-resolved vector column before querying it.',
+        },
+      };
+    }
     const countRow = rows(database, compiled.countSql, compiled.countParameters)[0];
     if (countRow === undefined) throw new TypeError('SQLite eligibility count produced no row.');
     const countValue = value(countRow, 'eligible_count');
