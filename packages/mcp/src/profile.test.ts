@@ -168,8 +168,10 @@ class FakeRuntime implements QueryRuntime {
   ): Promise<RuntimeOutcome<ExplainQueryValue>> {
     if (input.query.mode === 'records' && (
       input.query.from !== 'notes'
-      || input.query.select.some((field) => !['notes.id', 'notes.body', 'notes.status'].includes(field))
-      || input.query.order.some((item) => !['notes.id', 'notes.body', 'notes.status'].includes(item.by))
+      || input.query.select.some((field) =>
+        !['notes.id', 'notes.body', 'notes.status'].includes(field))
+      || input.query.order.some((item) =>
+        !['notes.id', 'notes.body', 'notes.status'].includes(item.by))
     )) {
       return Promise.resolve({
         ok: false,
@@ -476,7 +478,10 @@ test('saved queries verify receipts and always compile with the reader scope', a
     policyVersion: 'policy-1',
     scopeFingerprint: fingerprintScope(creator.scope),
   });
-  const codec = new HmacExecutionReceiptCodec(new Uint8Array(32).fill(7));
+  const codec = new HmacExecutionReceiptCodec([{
+    id: 'test-v1',
+    secret: new Uint8Array(32).fill(7),
+  }]);
   const receipt = codec.sign({
     version: '0',
     source: 'ops',
@@ -488,6 +493,12 @@ test('saved queries verify receipts and always compile with the reader scope', a
     catalogVersion: 'catalog-1',
     policyVersion: 'policy-1',
   });
+  assert.match(receipt, /^er_v0\.test-v1\./u);
+  const rotated = new HmacExecutionReceiptCodec([
+    { id: 'test-v2', secret: new Uint8Array(32).fill(8) },
+    { id: 'test-v1', secret: new Uint8Array(32).fill(7) },
+  ]);
+  assert.equal(rotated.verify(receipt).ok, true);
   const store = new VerifiedSavedQueryStore(
     codec,
     { identity: () => ({ catalogVersion: 'catalog-1', policyVersion: 'policy-1' }) },

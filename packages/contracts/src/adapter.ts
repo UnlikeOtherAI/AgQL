@@ -37,6 +37,7 @@ export type AdapterRefusalCode =
   | 'EMBEDDING_NOT_INDEXED'
   | 'FILTER_SHAPE_UNCERTIFIED'
   | 'COST_GATE_REFUSAL'
+  | 'SCHEMA_NOT_PROVISIONED'
   | 'AFTER_WRITE_TIMEOUT';
 
 export interface ExactScanLimitRemedy {

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { ScopeSchema } from '@agql/catalog';
 import type { CatalogPhysicalIdentifier } from '@agql/contracts';
 import { HmacExecutionReceiptCodec, MCP_PROTOCOL_VERSION } from '@agql/mcp';
+import type { ExecutionReceiptSigningKey } from '@agql/mcp';
 import {
   CatalogDocumentSchema,
   InstantValueSchema,
@@ -17,7 +18,6 @@ import type { CatalogDocument } from '@agql/schemas';
 import { Pool } from 'pg';
 
 import {
-  applicationSecret,
   createDeploymentServer,
   createPostgresDeployment,
   DeterministicEmbedderRegistry,
@@ -122,7 +122,7 @@ async function listen(application: ServerApplication): Promise<string> {
 async function seedStarterCatalog(
   catalog: CatalogDocument,
   deployment: PostgresDeployment,
-  key: string,
+  receiptKey: ExecutionReceiptSigningKey,
 ): Promise<void> {
   const runtime = new ServerRuntime({
     sourceId: 'default',
@@ -130,7 +130,7 @@ async function seedStarterCatalog(
     binding: deployment.binding,
     adapter: deployment.adapter,
     embedders: new DeterministicEmbedderRegistry(),
-    receiptCodec: new HmacExecutionReceiptCodec(applicationSecret([key])),
+    receiptCodec: new HmacExecutionReceiptCodec([receiptKey]),
   });
   const grouped = new Map<string, SeedRecord[]>();
   for (const record of await starterSeedRecords()) {
@@ -140,7 +140,7 @@ async function seedStarterCatalog(
   }
   const scope = ScopeSchema.parse({
     principal: 'agql:starter-integration-seed',
-    capabilities: ['ingest.canonical.v0'],
+    capabilities: ['ingest.canonical.v0', 'portfolio', 'starter', 'work-items'],
     partitions: { kind: 'unpartitioned' },
     budgets: {
       maximumQueries: 1_000,
@@ -203,12 +203,22 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
     let application: ServerApplication | undefined;
     try {
       await deployment.provision();
-      const key = 'postgres-server-test-key';
-      await seedStarterCatalog(catalog, deployment, key);
+      await deployment.provision();
+      const key = 'postgres-server-test-key-0123456789abcdef';
+      const appKey = {
+        id: 'postgres-server-test-key-v1',
+        secret: new TextEncoder().encode(key),
+      };
+      const receiptKey = {
+        id: 'postgres-server-receipt-v1',
+        secret: new TextEncoder().encode('postgres-receipt-secret-0123456789abcdef'),
+      };
+      await seedStarterCatalog(catalog, deployment, receiptKey);
       application = createDeploymentServer({
         config: {
           port: 0,
-          appKeys: [key],
+          appKeys: [appKey],
+          receiptKeys: [receiptKey],
           appCapabilities: ['portfolio', 'starter'],
           catalogPath: fileURLToPath(starterCatalogPath),
           databaseUrl,
@@ -220,6 +230,13 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
         logger: quietLogger,
       });
       const base = await listen(application);
+      const ready = await fetch(`${base}/ready`);
+      assert.equal(ready.status, 200);
+      assert.deepEqual(await ready.json(), {
+        ok: true,
+        version: '0.0.0',
+        catalog: catalog.catalogVersion,
+      });
       const expectedProjects = [
         { 'projects.id': 'project-atlas', 'projects.name': 'Atlas migration' },
         { 'projects.id': 'project-beacon', 'projects.name': 'Beacon onboarding' },
@@ -234,6 +251,23 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       const httpPayload = responseObject(await http.json());
       assert.equal(httpPayload.status, 'ok');
       assert.deepEqual(httpPayload.preview, expectedProjects);
+      const executionReceipt = httpPayload.executionReceipt;
+      assert.equal(typeof executionReceipt, 'string');
+      if (typeof executionReceipt !== 'string') {
+        throw new TypeError('The server did not issue an execution receipt.');
+      }
+      const receiptParts = executionReceipt.split('.');
+      assert.equal(receiptParts[0], 'er_v0');
+      assert.equal(receiptParts[1], receiptKey.id);
+      const receiptPayload = receiptParts[2];
+      if (receiptPayload === undefined) {
+        throw new TypeError('The execution receipt has no payload.');
+      }
+      const receiptClaims = responseObject(JSON.parse(
+        Buffer.from(receiptPayload, 'base64url').toString('utf8'),
+      ) as unknown);
+      assert.equal(receiptClaims.principal, `app:${appKey.id}`);
+      assert.equal(JSON.stringify(receiptClaims).includes(key), false);
 
       const explained = await fetch(`${base}/v0/query/explain`, {
         method: 'POST',
@@ -371,6 +405,37 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
       );
       assert.equal(unavailableMcpExplainPayload.status, 'rejected');
       assert.deepEqual(unavailableMcpExplainPayload.errors, errors);
+
+      const projects = deployment.datasets.find((dataset) =>
+        dataset.dataset.logicalId === 'projects');
+      if (projects === undefined) throw new TypeError('The starter binding requires projects.');
+      await admin.query(`DROP TABLE "${namespace}"."${projects.dataset.physical}"`);
+
+      const notReady = await fetch(`${base}/ready`);
+      assert.equal(notReady.status, 503);
+      assert.deepEqual(await notReady.json(), {
+        ok: false,
+        version: '0.0.0',
+        catalog: catalog.catalogVersion,
+        error: {
+          code: 'DATABASE_NOT_READY',
+          message: 'Database schema or role is unavailable.',
+        },
+      });
+
+      const unprovisioned = await fetch(`${base}/v0/query/run`, {
+        method: 'POST',
+        headers: headers(key),
+        body: JSON.stringify({ source: 'default', query: projectQuery() }),
+      });
+      assert.equal(unprovisioned.status, 200);
+      const unprovisionedPayload = responseObject(await unprovisioned.json());
+      assert.equal(unprovisionedPayload.status, 'rejected');
+      const unprovisionedErrors = unprovisionedPayload.errors;
+      if (!Array.isArray(unprovisionedErrors) || unprovisionedErrors.length === 0) {
+        throw new TypeError('The unprovisioned response did not contain an error.');
+      }
+      assert.equal(responseObject(unprovisionedErrors[0]).code, 'SCHEMA_NOT_PROVISIONED');
     } finally {
       if (application !== undefined) await application.close();
       else await deployment.close();

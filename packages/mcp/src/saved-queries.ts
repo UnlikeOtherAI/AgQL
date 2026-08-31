@@ -60,32 +60,55 @@ export interface ExecutionReceiptVerifier {
   verify(receipt: string): ReceiptVerification;
 }
 
+export interface ExecutionReceiptSigningKey {
+  readonly id: string;
+  readonly secret: Uint8Array;
+}
+
 function signature(key: Uint8Array, payload: string): Buffer {
   return createHmac('sha256', key).update(payload, 'utf8').digest();
 }
 
 /** HMAC codec for portable, session-independent execution receipts. */
 export class HmacExecutionReceiptCodec implements ExecutionReceiptVerifier {
-  readonly #key: Uint8Array;
+  readonly #active: ExecutionReceiptSigningKey;
+  readonly #keys: ReadonlyMap<string, Uint8Array>;
 
-  public constructor(key: Uint8Array) {
-    if (key.byteLength < 32) throw new TypeError('Execution receipt keys must contain 32 bytes.');
-    this.#key = key.slice();
+  public constructor(keys: readonly ExecutionReceiptSigningKey[]) {
+    const active = keys[0];
+    if (active === undefined) throw new TypeError('Execution receipt signing requires a key.');
+    const resolved = new Map<string, Uint8Array>();
+    for (const key of keys) {
+      if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(key.id)) {
+        throw new TypeError('Execution receipt key ids must use the safe identifier grammar.');
+      }
+      if (key.secret.byteLength < 32) {
+        throw new TypeError('Execution receipt keys must contain 32 bytes.');
+      }
+      if (resolved.has(key.id)) throw new TypeError('Execution receipt key ids must be unique.');
+      resolved.set(key.id, key.secret.slice());
+    }
+    this.#active = { id: active.id, secret: active.secret.slice() };
+    this.#keys = resolved;
   }
 
   public sign(claims: ExecutionReceiptClaims): string {
     const parsed = ExecutionReceiptClaimsSchema.parse(claims);
     const payload = Buffer.from(canonicalizeJcs(parsed), 'utf8').toString('base64url');
-    return `er_v0.${payload}.${signature(this.#key, payload).toString('base64url')}`;
+    return `er_v0.${this.#active.id}.${payload}.${signature(this.#active.secret, payload)
+      .toString('base64url')}`;
   }
 
   public verify(receipt: string): ReceiptVerification {
     const parts = receipt.split('.');
     const prefix = parts[0];
-    const payload = parts[1];
-    const encodedSignature = parts[2];
-    if (parts.length !== 3
+    const keyId = parts[1];
+    const payload = parts[2];
+    const encodedSignature = parts[3];
+    const key = keyId === undefined ? undefined : this.#keys.get(keyId);
+    if (parts.length !== 4
       || prefix !== 'er_v0'
+      || key === undefined
       || payload === undefined
       || encodedSignature === undefined) return { ok: false };
     let supplied: Buffer;
@@ -96,7 +119,7 @@ export class HmacExecutionReceiptCodec implements ExecutionReceiptVerifier {
     } catch {
       return { ok: false };
     }
-    const expected = signature(this.#key, payload);
+    const expected = signature(key, payload);
     if (supplied.byteLength !== expected.byteLength || !timingSafeEqual(supplied, expected)) {
       return { ok: false };
     }

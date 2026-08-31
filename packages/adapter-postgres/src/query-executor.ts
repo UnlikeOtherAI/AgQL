@@ -150,9 +150,9 @@ export async function executeQuery(
         ...(decoded.ranks === undefined ? {} : { ranks: decoded.ranks }),
       },
     };
-  } catch {
+  } catch (error: unknown) {
     await rollback(client);
-    return backendRefusal();
+    return backendRefusal(error);
   } finally {
     client.release();
   }

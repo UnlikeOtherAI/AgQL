@@ -28,7 +28,21 @@ export function unsafePlan<T>(path: string, message: string): AdapterOutcome<T> 
   );
 }
 
-export function backendRefusal<T>(): AdapterOutcome<T> {
+function missingRelation(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false;
+  return Reflect.get(error, 'code') === '42P01';
+}
+
+export function backendRefusal<T>(error?: unknown): AdapterOutcome<T> {
+  if (missingRelation(error)) {
+    return refusal(
+      'SCHEMA_NOT_PROVISIONED',
+      'The required AgQL PostgreSQL relation is not provisioned.',
+      '',
+      ['Retry after the deployment provisioner completes.'],
+      'Run the deployment provisioner for the active catalog binding before accepting traffic.',
+    );
+  }
   return refusal(
     'COST_GATE_REFUSAL',
     'PostgreSQL could not complete the bounded adapter operation.',

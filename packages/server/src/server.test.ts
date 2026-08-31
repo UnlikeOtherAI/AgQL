@@ -19,7 +19,7 @@ import type {
   RunQueryValue,
   RuntimeOutcome,
 } from '@agql/mcp';
-import { MCP_PROTOCOL_VERSION } from '@agql/mcp';
+import { HmacExecutionReceiptCodec, MCP_PROTOCOL_VERSION } from '@agql/mcp';
 
 import {
   ApplicationScopeResolver,
@@ -84,6 +84,16 @@ const runtimeTimings = {
   adapterCompileMs: 1,
   backendMs: 1,
   fusionReleaseMs: 1,
+};
+
+const agentSecret = 'correct-key-0123456789abcdef0123456789';
+const agentKey = {
+  id: 'server-test-key-v1',
+  secret: new TextEncoder().encode(agentSecret),
+};
+const receiptKey = {
+  id: 'server-test-receipt-v1',
+  secret: new TextEncoder().encode('receipt-secret-0123456789abcdef0123456789'),
 };
 
 function envelope(
@@ -224,13 +234,21 @@ function mcpBody() {
 }
 
 test('server listener protects MCP, HTTP, and principal channels', async () => {
+  const events: string[] = [];
   const application = new ServerApplication({
     catalog,
     runtime: new TransportRuntime(),
     agentAuthenticator: new ServerAgentAuthenticator(
-      new BearerKeyAuthenticator(['correct-key']),
+      new BearerKeyAuthenticator([agentKey]),
       new ApplicationScopeResolver(['test']),
     ),
+    receiptCodec: new HmacExecutionReceiptCodec([receiptKey]),
+    ready: () => Promise.resolve(),
+    logger: {
+      log(_level, event, fields) {
+        events.push(`${event}:${JSON.stringify(fields)}`);
+      },
+    },
   });
   const base = await listen(application);
   try {
@@ -242,12 +260,21 @@ test('server listener protects MCP, HTTP, and principal channels', async () => {
       catalog: 'server-test-catalog',
     });
 
+    const ready = await fetch(`${base}/ready`);
+    assert.equal(ready.status, 200);
+    assert.deepEqual(await ready.json(), {
+      ok: true,
+      version: '0.0.0',
+      catalog: 'server-test-catalog',
+    });
+
     const unauthenticated = await fetch(`${base}/v0/query/run`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ source: 'default', query }),
     });
     assert.equal(unauthenticated.status, 401);
+    assert.equal(unauthenticated.headers.get('www-authenticate'), 'Bearer realm="agql"');
     assert.equal(object((await unauthenticated.json())).errors instanceof Array, true);
 
     const badKey = await fetch(`${base}/v0/query/run`, {
@@ -255,9 +282,10 @@ test('server listener protects MCP, HTTP, and principal channels', async () => {
       headers: headers('wrong-key'),
       body: JSON.stringify({ source: 'default', query }),
     });
-    assert.equal(badKey.status, 403);
+    assert.equal(badKey.status, 401);
+    assert.equal(badKey.headers.get('www-authenticate'), 'Bearer realm="agql"');
 
-    const mcpHeaders = headers('correct-key');
+    const mcpHeaders = headers(agentSecret);
     mcpHeaders.set('mcp-protocol-version', MCP_PROTOCOL_VERSION);
     mcpHeaders.set('mcp-method', 'tools/call');
     mcpHeaders.set('mcp-name', 'run_query');
@@ -271,7 +299,7 @@ test('server listener protects MCP, HTTP, and principal channels', async () => {
 
     const http = await fetch(`${base}/v0/query/run`, {
       method: 'POST',
-      headers: headers('correct-key'),
+      headers: headers(agentSecret),
       body: JSON.stringify({ source: 'default', query }),
     });
     assert.equal(http.status, 200);
@@ -282,12 +310,15 @@ test('server listener protects MCP, HTTP, and principal channels', async () => {
 
     const principalAttempt = await fetch(`${base}/v0/principal-results`, {
       method: 'POST',
-      headers: headers('correct-key'),
+      headers: headers(agentSecret),
       body: JSON.stringify({ executionReceipt: 'server-test-receipt', pageSize: 1 }),
     });
     assert.equal(principalAttempt.status, 401);
     assert.equal(JSON.stringify(httpPayload).includes('principal-secret'), false);
     assert.equal(JSON.stringify(mcpPayload).includes('principal-secret'), false);
+    assert.equal(events.some((event) => event.includes('"principal":"app:server-test-key-v1"')),
+      true);
+    assert.equal(events.some((event) => event.includes(agentSecret)), false);
   } finally {
     await application.close();
   }
