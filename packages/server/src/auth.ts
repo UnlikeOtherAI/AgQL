@@ -106,15 +106,20 @@ export class BearerKeyAuthenticator implements AgentIdentityAuthenticator {
 const DEFAULT_SCOPE_EXPIRY = InstantValueSchema.parse('9999-12-31T23:59:59Z');
 
 /**
- * The default is intentionally useful only for datasets that declare themselves unpartitioned.
- * A partitioned catalog receives an explicit nothing-visible scope until an identity resolver
- * supplies concrete partition values.
+ * The bearer-key default grants only deployment-configured capabilities and unpartitioned
+ * visibility. A deployment bound to an identity authority supplies its own ScopeResolver.
  */
 export class ApplicationScopeResolver implements ScopeResolver {
+  readonly #capabilities: readonly string[];
+
+  public constructor(capabilities: readonly string[]) {
+    this.#capabilities = [...capabilities];
+  }
+
   public resolveAgentScope(principal: AuthenticatedAgent): Promise<Scope> {
     return Promise.resolve(ScopeSchema.parse({
       principal: principal.subject,
-      capabilities: [],
+      capabilities: this.#capabilities,
       partitions: { kind: 'unpartitioned' },
       budgets: {
         maximumQueries: 1_000,

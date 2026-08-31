@@ -12,6 +12,21 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export interface ServerConfig {
   readonly port: number;
   readonly appKeys: readonly string[];
+  readonly appCapabilities: readonly string[];
+  readonly catalogPath: string;
+  readonly databaseUrl: string;
+  readonly embedder: 'deterministic';
+  readonly logLevel: LogLevel;
+}
+
+export interface LoadedServerConfiguration {
+  readonly config: ServerConfig;
+  readonly catalog: CatalogDocument;
+}
+
+interface ServerBootstrapConfig {
+  readonly port: number;
+  readonly appKeys: readonly string[];
   readonly catalogPath: string;
   readonly databaseUrl: string;
   readonly embedder: 'deterministic';
@@ -43,17 +58,23 @@ function port(environment: NodeJS.ProcessEnv): number {
   return parsed;
 }
 
-function appKeys(environment: NodeJS.ProcessEnv): readonly string[] {
-  const values = required(environment, 'AGQL_APP_KEYS')
-    .split(',')
-    .map((value) => value.trim());
-  if (values.some((value) => value.length === 0)) {
-    throw new ConfigurationError('AGQL_APP_KEYS must be a comma-separated list of nonempty keys.');
+function commaSeparatedValues(
+  value: string,
+  name: string,
+): readonly string[] {
+  const values = value.split(',').map((candidate) => candidate.trim());
+  if (values.some((candidate) => candidate.length === 0)) {
+    throw new ConfigurationError(`${name} must be a comma-separated list of nonempty values.`);
   }
   if (new Set(values).size !== values.length) {
-    throw new ConfigurationError('AGQL_APP_KEYS must not contain duplicate keys.');
+    throw new ConfigurationError(`${name} must not contain duplicate values.`);
   }
   return values;
+}
+
+function appKeys(environment: NodeJS.ProcessEnv): readonly string[] {
+  const values = required(environment, 'AGQL_APP_KEYS');
+  return commaSeparatedValues(values, 'AGQL_APP_KEYS');
 }
 
 function embedder(environment: NodeJS.ProcessEnv): 'deterministic' {
@@ -73,9 +94,9 @@ function logLevel(environment: NodeJS.ProcessEnv): LogLevel {
   throw new ConfigurationError('AGQL_LOG_LEVEL must be debug, info, warn, or error.');
 }
 
-export function readServerConfig(
+function readServerBootstrapConfig(
   environment: NodeJS.ProcessEnv = process.env,
-): ServerConfig {
+): ServerBootstrapConfig {
   return {
     port: port(environment),
     appKeys: appKeys(environment),
@@ -84,6 +105,39 @@ export function readServerConfig(
     embedder: embedder(environment),
     logLevel: logLevel(environment),
   };
+}
+
+function declaredCapabilityTags(catalog: CatalogDocument): readonly string[] {
+  return [...new Set(Object.values(catalog.datasets)
+    .flatMap((dataset) => dataset.capabilityTags))].sort();
+}
+
+function declaredTagsMessage(tags: readonly string[]): string {
+  return tags.length === 0 ? '(none)' : tags.join(', ');
+}
+
+/** Validates the deployment-wide bearer-key capabilities against the loaded catalog. */
+export function validateApplicationCapabilities(
+  capabilities: readonly string[],
+  catalog: CatalogDocument,
+): readonly string[] {
+  const alternatives = declaredCapabilityTags(catalog);
+  if (capabilities.length === 0) {
+    throw new ConfigurationError(
+      'AGQL_APP_CAPABILITIES is required and must name one or more capability tags declared '
+      + `by the loaded catalog. Available tags: ${declaredTagsMessage(alternatives)}.`,
+    );
+  }
+  const available = new Set(alternatives);
+  for (const capability of capabilities) {
+    if (!available.has(capability)) {
+      throw new ConfigurationError(
+        `AGQL_APP_CAPABILITIES contains unknown capability tag "${capability}". `
+        + `Legal alternatives: ${declaredTagsMessage(alternatives)}.`,
+      );
+    }
+  }
+  return capabilities;
 }
 
 function catalogErrors(errors: readonly {
@@ -117,4 +171,26 @@ export async function loadCatalog(path: string): Promise<CatalogDocument> {
     );
   }
   return validated.value;
+}
+
+/**
+ * Loads and validates all deployment configuration before a database pool or listener opens.
+ * Capability validation follows catalog loading so failures can state the legal catalog tags.
+ */
+export async function loadServerConfiguration(
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<LoadedServerConfiguration> {
+  const bootstrap = readServerBootstrapConfig(environment);
+  const catalog = await loadCatalog(bootstrap.catalogPath);
+  const configured = environment.AGQL_APP_CAPABILITIES?.trim();
+  const appCapabilities = configured === undefined || configured.length === 0
+    ? validateApplicationCapabilities([], catalog)
+    : validateApplicationCapabilities(
+      commaSeparatedValues(configured, 'AGQL_APP_CAPABILITIES'),
+      catalog,
+    );
+  return {
+    catalog,
+    config: { ...bootstrap, appCapabilities },
+  };
 }

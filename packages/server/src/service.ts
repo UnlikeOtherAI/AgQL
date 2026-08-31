@@ -40,6 +40,7 @@ import type { PostgresDeployment } from './bindings.ts';
 import {
   DEFAULT_SOURCE_ID,
   SERVER_VERSION,
+  validateApplicationCapabilities,
 } from './config.ts';
 import type { LogLevel, ServerConfig } from './config.ts';
 import {
@@ -394,6 +395,7 @@ export interface DeploymentServerOptions {
 
 export function createDeploymentServer(options: DeploymentServerOptions): ServerApplication {
   validateDeterministicCatalog(options.catalog);
+  validateApplicationCapabilities(options.config.appCapabilities, options.catalog);
   const deployment = options.deployment ?? createPostgresDeployment(options.catalog, {
     databaseUrl: options.config.databaseUrl,
     tokenSecret: applicationSecret(options.config.appKeys),
@@ -412,7 +414,7 @@ export function createDeploymentServer(options: DeploymentServerOptions): Server
     runtime,
     agentAuthenticator: new ServerAgentAuthenticator(
       options.identityAuthenticator ?? new BearerKeyAuthenticator(options.config.appKeys),
-      options.scopeResolver ?? new ApplicationScopeResolver(),
+      options.scopeResolver ?? new ApplicationScopeResolver(options.config.appCapabilities),
     ),
     logger: options.logger ?? new JsonLogger(options.config.logLevel),
     closeRuntime: () => deployment.close(),

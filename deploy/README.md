@@ -38,7 +38,10 @@ git pull --ff-only origin main
 
 Create the deployment environment file. Its blank key and password fields are
 intentional: AgQL must not boot without an application key, and no usable
-credential is supplied by this repository.
+credential is supplied by this repository. `AGQL_APP_CAPABILITIES` is an exact,
+comma-separated subset of the loaded catalog's capability tags; it is not a
+wildcard. Empty capabilities mean nothing is visible, so the server rejects an
+empty value before opening a listener.
 
 ```sh
 cp deploy/.env.example deploy/.env
@@ -55,7 +58,9 @@ chmod 600 deploy/.env
 
 `AGQL_APP_KEYS` accepts a comma-separated key set for rotation. Generate every
 key with `openssl rand -hex 32`; do not reuse the database password as an
-application key.
+application key. The starter catalog exposes `portfolio`, `starter`, and
+`work-items` tags, and the example grants all three. Configure only the tags
+your deployment intentionally grants.
 
 Before exposing the service, paste the site block from
 [`Caddyfile.snippet`](Caddyfile.snippet) into the shared Caddyfile, replacing
@@ -88,22 +93,27 @@ curl --fail --silent --show-error https://agql.example.com/health
 ```
 
 The response must be JSON with `"ok":true`. To verify the authenticated MCP
-endpoint, read the first configured application key and send an MCP
-initialization request:
+endpoint, read the first configured application key and call `run_query` using
+the stateless MCP binding. The routing headers must match the JSON-RPC body,
+and every authenticated operation needs an explicit `AgQL-Anchor` containing a
+canonical UTC instant; the engine never reads a clock:
 
 ```sh
 app_key="$(awk -F= '$1 == "AGQL_APP_KEYS" { print $2; exit }' deploy/.env | cut -d, -f1)"
 curl --fail --silent --show-error \
   -X POST https://agql.example.com/mcp \
   -H "Authorization: Bearer ${app_key}" \
+  -H 'AgQL-Anchor: 2026-01-01T00:00:00Z' \
   -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agql-deploy-check","version":"1.0.0"}}}'
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'MCP-Method: tools/call' \
+  -H 'MCP-Name: run_query' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_query","arguments":{"source":"default","query":{"version":"0","mode":"records","from":"projects","select":["projects.id","projects.name"],"order":[{"by":"projects.id","dir":"asc"}],"take":3}},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
 ```
 
-The command must return a successful MCP initialization response. A 401 response
-means the bearer key was not copied correctly; do not remove authentication to
-work around it.
+The command must return a successful `tools/call` response containing the three
+starter project rows. A 401 response means the bearer key was not copied
+correctly; do not remove authentication to work around it.
 
 ## Operations
 

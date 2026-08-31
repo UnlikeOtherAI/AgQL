@@ -197,6 +197,11 @@ export class ServerRuntime implements QueryRuntime {
   }
 
   async #compile(context: AgentRequestContext, input: QueryOperationInput) {
+    const dataset = this.#catalog.datasets[input.query.from];
+    if (dataset !== undefined && !dataset.capabilityTags.every((tag) =>
+      context.scope.capabilities.includes(tag))) {
+      return { ok: false as const, errors: [referenceNotAvailable('/from')] as const };
+    }
     const vector = await this.#queryVector(input.query);
     return compileQuery({
       query: input.query,
