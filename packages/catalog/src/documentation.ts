@@ -6,7 +6,7 @@ import type {
   FieldDocument,
 } from '@agql/schemas';
 
-import { deriveEmbeddingSearchPolicy } from './policy.ts';
+import { datasetCapabilitiesAllow, deriveEmbeddingSearchPolicy } from './policy.ts';
 import type { Scope } from './scope.ts';
 import { accessRuleAllows } from './policy.ts';
 
@@ -126,6 +126,7 @@ export function deriveModelCatalogDocumentation(
 ): ModelCatalogDocumentation {
   const datasets: ModelDatasetDocumentation[] = [];
   for (const [id, dataset] of Object.entries(catalog.datasets)) {
+    if (!datasetCapabilitiesAllow(dataset, scope)) continue;
     if (!datasetVisible(dataset, scope)) continue;
     const fields = documentedFields(dataset, scope);
     const embeddings = documentedEmbeddings(catalog, dataset, scope);

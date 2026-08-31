@@ -71,23 +71,38 @@ const fieldPolicy = (rule: AccessRule) => ({
 });
 
 function catalogDocument() {
-  const dataset = (description: string, rule: AccessRule) => ({
+  const dataset = (
+    id: string,
+    description: string,
+    rule: AccessRule,
+    capability: string,
+  ) => ({
     description,
-    idField: 'id',
+    idField: `${id}.id`,
     fields: {
-      id: { kind: 'id' as const, description: 'Stable id.', nullable: false },
-      body: {
+      [`${id}.id`]: { kind: 'id' as const, description: 'Stable id.', nullable: false },
+      [`${id}.body`]: {
         kind: 'text' as const,
         description: 'Visible note body.',
         nullable: false,
         collation: { id: 'unicode', version: '15.1' },
       },
+      [`${id}.status`]: {
+        kind: 'enum' as const,
+        description: 'Visible note status.',
+        nullable: false,
+        values: [{ code: 'open', label: 'Open' }],
+      },
     },
     profiles: ['records.v0' as const],
     embeddings: {},
     rowScope: { kind: 'none' as const, reason: 'Explicitly unpartitioned.' },
-    capabilityTags: [],
-    fieldPolicies: { id: fieldPolicy(rule), body: fieldPolicy(rule) },
+    capabilityTags: [capability],
+    fieldPolicies: {
+      [`${id}.id`]: fieldPolicy(rule),
+      [`${id}.body`]: fieldPolicy(rule),
+      [`${id}.status`]: fieldPolicy(rule),
+    },
     embeddingPolicies: {},
   });
   return CatalogDocumentSchema.parse({
@@ -95,8 +110,8 @@ function catalogDocument() {
     catalogVersion: 'catalog-1',
     policyVersion: 'policy-1',
     datasets: {
-      notes: dataset('Scope-visible notes.', allow()),
-      payroll: dataset('Scope-hidden payroll.', deny),
+      notes: dataset('notes', 'Scope-visible notes.', allow(), 'notes:read'),
+      payroll: dataset('payroll', 'Scope-hidden payroll.', deny, 'payroll:read'),
     },
     embeddingSpecs: {},
   });
@@ -107,7 +122,7 @@ function context(principal = 'person:creator'): AgentRequestContext {
     credentialKind: 'agent',
     scope: {
       principal,
-      capabilities: [],
+      capabilities: ['notes:read'],
       partitions: { kind: 'unpartitioned' },
       budgets: {
         maximumQueries: SafeIntegerSchema.parse(20),
@@ -126,8 +141,8 @@ function query(): QueryDocument {
     version: '0',
     mode: 'records',
     from: 'notes',
-    select: ['id'],
-    order: [{ by: 'id', dir: 'asc' }],
+    select: ['notes.id'],
+    order: [{ by: 'notes.id', dir: 'asc' }],
     take: SafeIntegerSchema.parse(1),
   };
 }
@@ -151,6 +166,22 @@ class FakeRuntime implements QueryRuntime {
     requestContext: AgentRequestContext,
     input: QueryOperationInput,
   ): Promise<RuntimeOutcome<ExplainQueryValue>> {
+    if (input.query.mode === 'records' && (
+      input.query.from !== 'notes'
+      || input.query.select.some((field) => !['notes.id', 'notes.body', 'notes.status'].includes(field))
+      || input.query.order.some((item) => !['notes.id', 'notes.body', 'notes.status'].includes(item.by))
+    )) {
+      return Promise.resolve({
+        ok: false,
+        errors: [{
+          code: 'REFERENCE_NOT_AVAILABLE',
+          message: 'The referenced catalog item is not available in this scope.',
+          path: '/select/0',
+          alternatives: ['notes.body', 'notes.id', 'notes.status'],
+        }],
+        timings,
+      });
+    }
     const identity = identities(input, requestContext);
     return Promise.resolve({
       ok: true,
@@ -334,6 +365,70 @@ test('catalog resources are generated, scope-narrowed, and privately cacheable',
   const serialized = JSON.stringify(result.resources);
   assert.equal(serialized.includes('notes'), true);
   assert.equal(serialized.includes('payroll'), false);
+});
+
+test('capability-hidden and nonexistent datasets are indistinguishable on discovery routes', () => {
+  const complete = catalogDocument();
+  const notes = complete.datasets.notes;
+  if (notes === undefined) throw new TypeError('The discovery fixture requires notes.');
+  const full = new ScopedCatalogProfile([{ id: 'ops', catalog: complete }]);
+  const withoutPayroll = new ScopedCatalogProfile([{
+    id: 'ops',
+    catalog: CatalogDocumentSchema.parse({ ...complete, datasets: { notes } }),
+  }]);
+  const requestContext = context();
+
+  assert.deepEqual(
+    full.search(requestContext, 'ops', 'payroll', 20),
+    full.search(requestContext, 'ops', 'not-a-dataset', 20),
+  );
+  assert.deepEqual(
+    full.describe(requestContext, 'ops', ['payroll']),
+    full.describe(requestContext, 'ops', ['not-a-dataset']),
+  );
+  assert.deepEqual(
+    full.lookupValues(requestContext, 'ops', 'payroll.status', '', 20),
+    full.lookupValues(requestContext, 'ops', 'not-a-field', '', 20),
+  );
+  assert.deepEqual(full.resources(requestContext), withoutPayroll.resources(requestContext));
+  assert.deepEqual(
+    full.readResource(requestContext, 'agql://catalog/ops'),
+    withoutPayroll.readResource(requestContext, 'agql://catalog/ops'),
+  );
+  assert.deepEqual(
+    full.readResource(requestContext, 'agql://catalog/ops/datasets/payroll'),
+    full.readResource(requestContext, 'agql://catalog/ops/datasets/not-a-dataset'),
+  );
+});
+
+test('discovered field references round trip through describe and explain_query', async () => {
+  const profile = new ScopedCatalogProfile([{ id: 'ops', catalog: catalogDocument() }]);
+  const discovery = profile.search(context(), 'ops', 'stable', 20);
+  assert.equal(discovery.ok, true);
+  if (!discovery.ok) return;
+  const id = discovery.value.matches.find((item) => item.kind === 'field')?.ref;
+  assert.equal(id, 'notes.id');
+  if (id === undefined) return;
+
+  const description = profile.describe(context(), 'ops', [id]);
+  assert.equal(description.ok, true);
+  if (!description.ok) return;
+  assert.deepEqual(description.value.datasets[0]?.fields.map((field) => field.id), [id]);
+
+  const response = await server().dispatch(request('tools/call', {
+    name: 'explain_query',
+    arguments: {
+      source: 'ops',
+      query: {
+        ...query(),
+        select: [id],
+        order: [{ by: id, dir: 'asc' }],
+      },
+    },
+  }), context());
+  assert.equal(response.httpStatus, 200);
+  const result = resultRecord(response);
+  assert.equal(JSON.stringify(result.structuredContent).includes('REFERENCE_NOT_AVAILABLE'), false);
 });
 
 test('the Streamable HTTP binding is stateless and rejects initialize', async () => {

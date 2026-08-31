@@ -1,4 +1,8 @@
-import { ScopeSchema, validateCatalog } from '@agql/catalog';
+import {
+  ScopeSchema,
+  datasetCapabilitiesAllow,
+  validateCatalog,
+} from '@agql/catalog';
 import type {
   CanonicalIngestPlan,
   ResolvedCanonicalFieldValue,
@@ -25,6 +29,7 @@ import {
   semanticError,
   unavailableReference,
 } from './errors.ts';
+import { availableDatasetReferences } from './policy.ts';
 import { expandScope } from './scope.ts';
 import type {
   CompileIngestInput,
@@ -251,6 +256,13 @@ export function compileIngest(input: CompileIngestInput): EngineResult<CompileIn
   const dataset = catalog.value.datasets[document.dataset];
   const binding = input.binding.datasets[document.dataset];
   if (dataset === undefined || binding === undefined) return fail(unavailableReference('/dataset'));
+  if (!datasetCapabilitiesAllow(dataset, scope.data)) {
+    return fail(unavailableReference('/dataset', availableDatasetReferences(
+      catalog.value,
+      input.binding,
+      scope.data,
+    )));
+  }
   if (!dataset.profiles.includes('ingest.canonical.v0')
     || !input.adapter.profiles.includes('ingest.canonical.v0')
     || !scope.data.capabilities.includes('ingest.canonical.v0')) {

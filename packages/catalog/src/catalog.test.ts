@@ -99,7 +99,7 @@ function rawCatalog() {
 function scope(partitions: Scope['partitions']): Scope {
   return {
     principal: 'uoa:person:one',
-    capabilities: ['notes:read'],
+    capabilities: ['canonical', 'notes:read'],
     partitions,
     budgets: {
       maximumQueries: SafeIntegerSchema.parse(10),
@@ -251,4 +251,11 @@ test('scope-derived documentation uses exactly the queryable model vocabulary', 
     nullable: false,
     collation: { id: 'unicode-codepoint', version: '15.1' },
   });
+  assert.deepEqual(
+    deriveModelCatalogDocumentation(catalog, {
+      ...scope({ kind: 'unpartitioned' }),
+      capabilities: ['notes:read'],
+    }).datasets,
+    [],
+  );
 });

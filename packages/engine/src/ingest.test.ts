@@ -21,6 +21,7 @@ import { compileIngest } from './ingest.ts';
 import {
   binding,
   catalog,
+  catalogWithDocs,
   scope,
 } from './test-fixtures.ts';
 import type {
@@ -95,6 +96,22 @@ test('insertOnly compiles a complete typed record and preserves idempotency', ()
   assert.deepEqual(amount?.value, {
     kind: 'money',
     value: { amount: '10.5', currency: 'USD' },
+  });
+});
+
+test('ingest refuses a dataset whose capability tags are unavailable to the scope', () => {
+  const denied = compileIngest({
+    ...input(insert),
+    catalog: catalogWithDocs((dataset) => ({
+      ...dataset,
+      capabilityTags: ['docs:read'],
+    })),
+  });
+  assert.deepEqual(firstError(denied), {
+    code: 'REFERENCE_NOT_AVAILABLE',
+    message: 'The referenced catalog item is not available in this scope.',
+    path: '/dataset',
+    alternatives: [],
   });
 });
 
