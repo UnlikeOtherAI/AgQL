@@ -1,0 +1,7 @@
+{"dataset":"projects","id":"project-atlas","value":{"id":"project-atlas","name":"Atlas migration","owner":"Platform","stage":"active","summary":"Move the reporting workload to the governed platform with a measured cutover plan."}}
+{"dataset":"projects","id":"project-beacon","value":{"id":"project-beacon","name":"Beacon onboarding","owner":"Customer Success","stage":"planned","summary":"Create a clear onboarding path that helps new teams reach their first useful result."}}
+{"dataset":"projects","id":"project-cirrus","value":{"id":"project-cirrus","name":"Cirrus reliability","owner":"Infrastructure","stage":"paused","summary":"Reduce recurring deployment interruptions by documenting ownership and recovery checks."}}
+{"dataset":"tasks","id":"task-atlas-1","value":{"id":"task-atlas-1","projectId":"project-atlas","title":"Confirm reporting cutover owners","owner":"Platform","status":"in_progress","dueDate":"2026-09-15"}}
+{"dataset":"tasks","id":"task-atlas-2","value":{"id":"task-atlas-2","projectId":"project-atlas","title":"Review reconciliation checklist","owner":"Finance Systems","status":"todo","dueDate":"2026-09-22"}}
+{"dataset":"tasks","id":"task-beacon-1","value":{"id":"task-beacon-1","projectId":"project-beacon","title":"Draft first-result guidance","owner":"Customer Success","status":"todo","dueDate":"2026-10-01"}}
+{"dataset":"tasks","id":"task-cirrus-1","value":{"id":"task-cirrus-1","projectId":"project-cirrus","title":"Capture restart runbook findings","owner":"Infrastructure","status":"blocked","dueDate":null}}

@@ -12,6 +12,7 @@
     "conformance": "pnpm --filter @agql/conformance conformance",
     "conformance:exhaustive": "pnpm --filter @agql/conformance conformance:exhaustive",
     "lint": "eslint . --max-warnings 0",
+    "seed": "pnpm --filter @agql/server seed",
     "test": "pnpm --recursive --if-present test",
     "typecheck": "tsc --noEmit"
   },
