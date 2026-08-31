@@ -7,6 +7,7 @@ import type {
 } from '@agql/contracts';
 import type { CanonicalDecimal, NormalizedText } from '@agql/schemas';
 
+import { scalarForWrite } from './scalars.ts';
 import type { SqliteParameter, SqliteTextCollation } from './types.ts';
 
 export const DELETED_COLUMN = '__agql_deleted';
@@ -18,6 +19,20 @@ export function quoteIdentifier(identifier: CatalogPhysicalIdentifier): string {
 
 export function quoteRuntimeIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function comparisonColumn(field: ResolvedFieldBinding): string {
+  const column = quoteIdentifier(field.physical);
+  switch (field.type.kind) {
+    case 'id':
+    case 'text':
+    case 'enum':
+    case 'date':
+    case 'instant':
+      return `(${column} COLLATE BINARY)`;
+    default:
+      return column;
+  }
 }
 
 function isSupportedTextCollation(
@@ -38,23 +53,7 @@ export function requiresSupportedCollation(
 }
 
 export function scalarParameter(value: TypedValue): SqliteParameter {
-  switch (value.kind) {
-    case 'id':
-    case 'enum':
-    case 'text':
-    case 'date':
-    case 'instant':
-    case 'decimal':
-      return value.value;
-    case 'boolean':
-      return value.value ? 1 : 0;
-    case 'integer':
-      return value.value;
-    case 'money':
-      return JSON.stringify(value.value);
-    case 'null':
-      return null;
-  }
+  return scalarForWrite(value);
 }
 
 function appendParameters(
@@ -140,22 +139,32 @@ function comparisonSql(
   operator: 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte',
   value: TypedValue,
 ): { readonly sql: string; readonly parameters: readonly SqliteParameter[] } {
-  const column = quoteIdentifier(field.physical);
+  const column = comparisonColumn(field);
   if (value.kind === 'null') {
-    const sql = operator === 'eq' ? `${column} IS NULL` : `${column} IS NOT NULL`;
+    const sql = operator === 'eq'
+      ? `${column} IS NULL`
+      : operator === 'ne' ? `${column} IS NOT NULL` : '0 = 1';
     return { sql, parameters: [] };
   }
   if (field.type.kind === 'decimal' && value.kind === 'decimal'
     && operator !== 'eq' && operator !== 'ne') {
-    return decimalComparison(column, operator, value.value);
+    const comparison = decimalComparison(column, operator, value.value);
+    return {
+      sql: `(${column} IS NOT NULL AND ${comparison.sql})`,
+      parameters: comparison.parameters,
+    };
   }
   if (field.type.kind === 'money' && value.kind === 'money') {
     if (value.value.currency !== field.type.currency) {
-      return { sql: '0 = 1', parameters: [] };
+      return { sql: operator === 'ne' ? '1 = 1' : '0 = 1', parameters: [] };
     }
     const amount = moneyAmountColumn(column);
     if (operator !== 'eq' && operator !== 'ne') {
-      return decimalComparison(amount, operator, value.value.amount);
+      const comparison = decimalComparison(amount, operator, value.value.amount);
+      return {
+        sql: `(${amount} IS NOT NULL AND ${comparison.sql})`,
+        parameters: comparison.parameters,
+      };
     }
   }
   const parameter = scalarParameter(value);
@@ -167,7 +176,12 @@ function comparisonSql(
     gt: '>',
     gte: '>=',
   }[operator];
-  return { sql: `${column} ${operatorSql} ?`, parameters: [parameter] };
+  const sql = operator === 'eq'
+    ? `(${column} IS NOT NULL AND ${column} ${operatorSql} ?)`
+    : operator === 'ne'
+      ? `(${column} IS NULL OR ${column} ${operatorSql} ?)`
+      : `(${column} IS NOT NULL AND ${column} ${operatorSql} ?)`;
+  return { sql, parameters: [parameter] };
 }
 
 function substringSql(
@@ -175,11 +189,45 @@ function substringSql(
   operation: 'contains' | 'startsWith',
   value: NormalizedText,
 ): { readonly sql: string; readonly parameters: readonly SqliteParameter[] } {
-  const column = quoteIdentifier(field.physical);
-  if (operation === 'contains') return { sql: `instr(${column}, ?) > 0`, parameters: [value] };
+  const column = comparisonColumn(field);
+  if (operation === 'contains') {
+    return {
+      sql: `(${column} IS NOT NULL AND instr(${column}, ?) > 0)`,
+      parameters: [value],
+    };
+  }
   return {
-    sql: `substr(${column}, 1, length(?)) = ?`,
+    sql: `(${column} IS NOT NULL AND (substr(${column}, 1, length(?)) COLLATE BINARY) = ?)`,
     parameters: [value, value],
+  };
+}
+
+function listSql(predicate: Extract<ResolvedPredicate, { readonly kind: 'list' }>): {
+  readonly sql: string;
+  readonly parameters: readonly SqliteParameter[];
+} {
+  const column = comparisonColumn(predicate.field);
+  const containsNull = predicate.values.some((value) => value.kind === 'null');
+  const values = predicate.values
+    .filter((value) => value.kind !== 'null')
+    .map(scalarParameter);
+  const membership = values.length === 0
+    ? undefined
+    : `${column} IN (${values.map(() => '?').join(', ')})`;
+  if (predicate.op === 'in') {
+    const nonNull = membership === undefined
+      ? '0 = 1'
+      : `(${column} IS NOT NULL AND ${membership})`;
+    return {
+      sql: containsNull ? `(${column} IS NULL OR ${nonNull})` : nonNull,
+      parameters: values,
+    };
+  }
+  const nonNull = membership === undefined ? `${column} IS NOT NULL`
+    : `(${column} IS NOT NULL AND NOT (${membership}))`;
+  return {
+    sql: containsNull ? nonNull : `(${column} IS NULL OR ${nonNull})`,
+    parameters: values,
   };
 }
 
@@ -201,19 +249,13 @@ function predicateSql(predicate: ResolvedPredicate): {
     return substringSql(predicate.field, predicate.op, predicate.value);
   }
   if (predicate.kind === 'instantRange') {
-    const column = quoteIdentifier(predicate.field.physical);
+    const column = comparisonColumn(predicate.field);
     return {
-      sql: `(${column} >= ? AND ${column} < ?)`,
+      sql: `(${column} IS NOT NULL AND ${column} >= ? AND ${column} < ?)`,
       parameters: [predicate.startInclusive, predicate.endExclusive],
     };
   }
-  const column = quoteIdentifier(predicate.field.physical);
-  const values = predicate.values.map(scalarParameter);
-  const placeholders = values.map(() => '?').join(', ');
-  return {
-    sql: `${column} ${predicate.op === 'in' ? 'IN' : 'NOT IN'} (${placeholders})`,
-    parameters: values,
-  };
+  return listSql(predicate);
 }
 
 export function filterSql(filter: LogicalFilter<ResolvedPredicate> | undefined): {

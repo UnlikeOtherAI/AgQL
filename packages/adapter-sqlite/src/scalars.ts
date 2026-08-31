@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer';
+
 import {
   CanonicalDecimalSchema,
   DateValueSchema,
@@ -84,15 +86,51 @@ export function typedValueFromSqlite(value: unknown, field: ResolvedFieldBinding
 }
 
 export function scalarForWrite(value: TypedValue): SqliteParameter {
+  const raw: unknown = Reflect.get(value, 'value');
   switch (value.kind) {
     case 'null':
+      if (raw !== null) throw new TypeError('A null TypedValue must carry null.');
       return null;
     case 'boolean':
-      return value.value ? 1 : 0;
+      if (typeof raw !== 'boolean') {
+        throw new TypeError('A boolean TypedValue must carry a boolean.');
+      }
+      return raw ? 1 : 0;
+    case 'integer':
+      return SafeIntegerSchema.parse(raw);
+    case 'decimal':
+      return CanonicalDecimalSchema.parse(raw);
     case 'money':
-      return JSON.stringify(value.value);
-    default:
+      return JSON.stringify(MoneyValueSchema.parse(raw));
+    case 'text':
+      return NormalizedTextSchema.parse(raw);
+    case 'date':
+      return DateValueSchema.parse(raw);
+    case 'instant':
+      return InstantValueSchema.parse(raw);
+    case 'id':
+      if (typeof raw !== 'string' || raw === '') {
+        throw new TypeError('An id TypedValue must carry a non-empty string.');
+      }
+      return raw;
+    case 'enum':
+      if (typeof raw !== 'string') {
+        throw new TypeError('An enum TypedValue must carry a string code.');
+      }
+      return raw;
+  }
+}
+
+function orderedString(value: TypedValue): string {
+  switch (value.kind) {
+    case 'id':
+    case 'text':
+    case 'enum':
+    case 'date':
+    case 'instant':
       return value.value;
+    default:
+      throw new TypeError(`${value.kind} is not a string-ordered value.`);
   }
 }
 
@@ -120,8 +158,12 @@ export function compareTypedValues(left: TypedValue, right: TypedValue): -1 | 0 
   if (left.kind !== right.kind) {
     throw new TypeError(`Cannot compare ${left.kind} and ${right.kind}.`);
   }
-  if (left.value < right.value) return -1;
-  if (left.value > right.value) return 1;
+  const comparison = Buffer.compare(
+    Buffer.from(orderedString(left), 'utf8'),
+    Buffer.from(orderedString(right), 'utf8'),
+  );
+  if (comparison < 0) return -1;
+  if (comparison > 0) return 1;
   return 0;
 }
 

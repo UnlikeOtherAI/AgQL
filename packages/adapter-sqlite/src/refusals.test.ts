@@ -77,3 +77,24 @@ test('the descriptor omits hybrid and refuses approximate semantic plans', async
   assert.equal(result.kind, 'refusal');
   if (result.kind === 'refusal') assert.equal(result.refusal.code, 'UNSUPPORTED_PROFILE');
 });
+
+test('semantic compilation refuses a runtime vector that does not match its EmbeddingSpec',
+  async () => {
+  const sqlite = createSqliteAdapter({
+    databasePath: '/path/that-is-never-opened-for-compile.sqlite',
+    exactScanAdmissionLimit: safe(10),
+    supportedTextCollations: [],
+    id: 'sqlite-reference',
+    version: 'test-v1',
+  });
+  const result = await sqlite.query.compile({
+    ...approximate,
+    search: {
+      ...approximate.search,
+      accuracy: 'exact',
+      vector: { ...approximate.search.vector, bytes: new Uint8Array(4), dimension: safe(1) },
+    },
+  });
+  assert.equal(result.kind, 'refusal');
+  if (result.kind === 'refusal') assert.equal(result.refusal.code, 'EMBEDDING_NOT_INDEXED');
+});
