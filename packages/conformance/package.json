@@ -10,11 +10,13 @@
     "conformance:exhaustive": "tsx src/cli.ts --tier exhaustive"
   },
   "dependencies": {
+    "@agql/adapter-postgres": "workspace:*",
     "@agql/adapter-sqlite": "workspace:*",
     "@agql/catalog": "workspace:*",
     "@agql/contracts": "workspace:*",
     "@agql/engine": "workspace:*",
-    "@agql/schemas": "workspace:*"
+    "@agql/schemas": "workspace:*",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "tsx": "^4.20.5"

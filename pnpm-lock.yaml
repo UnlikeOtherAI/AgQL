@@ -74,6 +74,9 @@ importers:
 
   packages/conformance:
     dependencies:
+      '@agql/adapter-postgres':
+        specifier: workspace:*
+        version: link:../adapter-postgres
       '@agql/adapter-sqlite':
         specifier: workspace:*
         version: link:../adapter-sqlite
@@ -89,6 +92,9 @@ importers:
       '@agql/schemas':
         specifier: workspace:*
         version: link:../schemas
+      pg:
+        specifier: ^8.16.3
+        version: 8.23.0
     devDependencies:
       tsx:
         specifier: ^4.20.5

@@ -5,8 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { canonicalizeJcs } from '@agql/schemas';
 
 import { runEncodingSuite } from './encoding.ts';
-import { unavailableAdapterDriver } from './exact-driver.ts';
-import type { ExactAdapterDriver } from './exact-driver.ts';
 import { runExactSuite } from './exact.ts';
 import { deferredReceiptCoverage } from './extensions.ts';
 import { blocked, fixtureResult } from './outcomes.ts';
@@ -29,6 +27,7 @@ import {
 } from './security.ts';
 import type { SecurityReplay, SecurityTier } from './security.ts';
 import { createSqliteExactDriver } from './sqlite-exact-driver.ts';
+import { createPostgresExactDriver } from './postgres-exact-driver.ts';
 
 type SuiteName = 'encoding' | 'exact' | 'security' | 'retrieval' | 'portability';
 type AdapterSelection = 'sqlite' | 'postgres' | 'both';
@@ -142,14 +141,6 @@ function parseOptions(args: readonly string[]): CliOptions {
   };
 }
 
-function postgresDriver(): ExactAdapterDriver {
-  const urlConfigured = process.env.AGQL_CONFORMANCE_POSTGRES_URL !== undefined;
-  const reason = urlConfigured
-    ? 'PostgreSQL needs deployment role, namespace, collation, and binding configuration.'
-    : 'AGQL_CONFORMANCE_POSTGRES_URL is not configured.';
-  return unavailableAdapterDriver('postgres-pgvector', 'unconfigured', reason);
-}
-
 function singleAdapterPortability(adapter: AdapterSelection): SuiteReport {
   const id = 'portability.requires-two-adapters';
   const rule = 'RFC §12 gate 1 requires two materially different exact adapters.';
@@ -189,7 +180,7 @@ async function run(options: CliOptions): Promise<number> {
       portability = await runPortabilitySuite(
         corpusRoot,
         createSqliteExactDriver(),
-        postgresDriver(),
+        createPostgresExactDriver(),
       );
       suites.push(portability.report);
     } else {
@@ -204,7 +195,7 @@ async function run(options: CliOptions): Promise<number> {
         suites.push((await runExactSuite(corpusRoot, createSqliteExactDriver())).report);
       }
       if (options.adapter === 'postgres' || options.adapter === 'both') {
-        suites.push((await runExactSuite(corpusRoot, postgresDriver())).report);
+        suites.push((await runExactSuite(corpusRoot, createPostgresExactDriver())).report);
       }
     }
   }
