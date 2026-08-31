@@ -2,7 +2,7 @@
 # Unquoted, `no`/`on`/`true` would still be strings under 1.2 core
 # (1.1 booleans are gone), but 3.10 would become the float 3.1 —
 # quoting is how an author states "this is text" unambiguously.
-version: "1"
+version: "0"
 mode: records
 from: companiesImport
 where:

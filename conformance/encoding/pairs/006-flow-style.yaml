@@ -1,2 +1,2 @@
 # Entirely flow-style YAML: still the same canonical query.
-{ version: "1", mode: aggregate, from: orders, metrics: [ { kind: aggregate, op: count, id: orders } ], take: 1 }
+{ version: "0", mode: aggregate, from: orders, metrics: [ { kind: aggregate, op: count, id: orders } ], take: 1 }
