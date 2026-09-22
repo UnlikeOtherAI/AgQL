@@ -19,11 +19,14 @@ test('exact suite accounts for every fixture and preserves explicit extension bl
       + execution.report.totals.undetermined,
     45,
   );
-  const calendar = execution.report.fixtures.find((fixture) =>
-    fixture.id === 'exact.aggregate.calendar-day-dst-spring');
-  assert.equal(calendar?.outcome.status, 'blocked');
-  if (calendar?.outcome.status !== 'blocked') assert.fail('Expected calendar blocker.');
-  assert.equal(calendar.outcome.capability, 'calendar-period-adapter-values');
+  for (const id of [
+    'exact.aggregate.calendar-day-dst-spring',
+    'exact.aggregate.calendar-fiscal-day-dst-fall',
+    'exact.aggregate.calendar-week-start',
+  ]) {
+    const calendar = execution.report.fixtures.find((fixture) => fixture.id === id);
+    assert.equal(calendar?.outcome.status, 'pass');
+  }
   const receiptContract = execution.report.fixtures.find((fixture) =>
     fixture.id === 'exact.records.decimal-precision-scale-boundaries');
   assert.equal(receiptContract?.outcome.status, 'blocked');

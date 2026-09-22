@@ -22,7 +22,10 @@ export const QUERY_LIMITS = {
 
 const ReferenceSchema = z.string().min(1);
 const OutputIdSchema = z.string().min(1);
-const CalendarUnitSchema = z.enum(['day', 'week', 'month', 'quarter', 'year']);
+/** RFC v0 §5.1: RelativeUnit and CalendarUnit are day, week, or month. */
+const RelativeUnitSchema = z.enum(['day', 'week', 'month']);
+/** RFC v0 §4.1: the supported time-bucket grains. */
+const CalendarGrainSchema = z.enum(['day', 'fiscalDay', 'week', 'month']);
 
 const ValuePredicateSchema = z.object({
   kind: z.literal('predicate'),
@@ -56,14 +59,14 @@ const InLastPredicateSchema = z.object({
   field: ReferenceSchema,
   op: z.literal('inLast'),
   amount: PositiveSafeIntegerSchema,
-  unit: CalendarUnitSchema,
+  unit: RelativeUnitSchema,
 }).strict();
 
 const RelativePeriodPredicateSchema = z.object({
   kind: z.literal('predicate'),
   field: ReferenceSchema,
   op: z.enum(['inCurrent', 'inPrevious']),
-  unit: CalendarUnitSchema,
+  unit: RelativeUnitSchema,
 }).strict();
 
 export const PredicateLeafSchema = z.discriminatedUnion('op', [
@@ -176,11 +179,13 @@ const FieldDimensionSchema = z.object({
   id: OutputIdSchema,
 }).strict();
 
+// RFC v0 §5.3 closes this object over field, grain and id. The bucket timezone
+// is catalog calendar policy (§4.1), never a query member: a query-supplied
+// timezone would be a second source of truth for the same decision.
 const TimeDimensionSchema = z.object({
   kind: z.literal('timeBucket'),
   field: ReferenceSchema,
-  grain: CalendarUnitSchema,
-  timezone: z.string().min(1),
+  grain: CalendarGrainSchema,
   id: OutputIdSchema,
 }).strict();
 

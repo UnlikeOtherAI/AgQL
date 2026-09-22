@@ -5,7 +5,8 @@ import type { InstantValue, SafeInteger } from '@agql/schemas';
 import { fail, semanticError } from './errors.ts';
 import type { EngineResult } from './types.ts';
 
-export type CalendarUnit = 'day' | 'week' | 'month' | 'quarter' | 'year';
+/** RFC v0 §5.1 relative units. Grains are a separate vocabulary (§4.1). */
+export type CalendarUnit = 'day' | 'week' | 'month';
 
 function dateFromAnchor(anchor: InstantValue): Date {
   return new Date(anchor);
@@ -48,8 +49,6 @@ function shiftMonths(source: Date, months: number): Date {
 
 function shift(source: Date, amount: number, unit: CalendarUnit): Date {
   if (unit === 'month') return shiftMonths(source, amount);
-  if (unit === 'quarter') return shiftMonths(source, amount * 3);
-  if (unit === 'year') return shiftMonths(source, amount * 12);
   const result = new Date(source.getTime());
   result.setUTCDate(result.getUTCDate() + amount * (unit === 'week' ? 7 : 1));
   return result;
@@ -58,8 +57,6 @@ function shift(source: Date, amount: number, unit: CalendarUnit): Date {
 function periodStart(anchor: Date, unit: CalendarUnit): Date {
   const year = anchor.getUTCFullYear();
   const month = anchor.getUTCMonth();
-  if (unit === 'year') return utcDate(year, 0, 1);
-  if (unit === 'quarter') return utcDate(year, Math.floor(month / 3) * 3, 1);
   if (unit === 'month') return utcDate(year, month, 1);
   const day = utcDate(year, month, anchor.getUTCDate());
   if (unit === 'day') return day;

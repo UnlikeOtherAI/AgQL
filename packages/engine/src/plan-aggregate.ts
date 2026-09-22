@@ -248,18 +248,14 @@ export function buildAggregatePlan(
     ));
     let shape: ResultSchemaField;
     if (dimension.kind === 'timeBucket') {
-      if (dimension.grain === 'quarter' || dimension.grain === 'year') {
-        return fail(semanticError(
-          'The calendar grain is not part of the v0 vocabulary.',
-          `/dimensions/${index}/grain`,
-          ['day', 'fiscalDay', 'week', 'month'],
-        ));
-      }
+      // RFC v0 §4.1: the bucket timezone is catalog calendar policy, so it is
+      // resolved here rather than accepted from the query.
+      const timezone = context.input.calendar.timezone;
       shape = {
         id: dimension.id,
         kind: 'calendarPeriod',
         grain: dimension.grain,
-        timezone: dimension.timezone,
+        timezone,
         nullable: true,
       };
       if (field.value.type.kind !== 'instant' && field.value.type.kind !== 'date') {
@@ -269,19 +265,12 @@ export function buildAggregatePlan(
           ['Use a date or instant field.'],
         ));
       }
-      if (dimension.timezone !== context.input.calendar.timezone) {
-        return fail(semanticError(
-          'The time-bucket timezone is not available in this calendar policy.',
-          `/dimensions/${index}/timezone`,
-          [context.input.calendar.timezone],
-        ));
-      }
       dimensions.push({
         kind: 'calendarPeriod',
         output,
         field: field.value,
         grain: dimension.grain,
-        timezone: dimension.timezone,
+        timezone,
         weekStart: context.input.calendar.weekStart,
         fiscalDayStart: context.input.calendar.fiscalDayStart,
         resultKind: 'calendarPeriod',
