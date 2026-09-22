@@ -52,6 +52,14 @@ choice into the language.
 | `026`–`033` | deterministic errors, hidden references, hashes, aliases |
 | `034`–`036` | exact retrieval membership, filtering, and admission |
 | `037`–`039` | normative deferrals, forbidden escape hatches, empty scope |
+| `040`–`045` | civil-time relative windows, anchored future rows, money and average scale, scope under disjunction, empty aggregates, date fields |
+
+Fixtures `040`-`045` were derived from failure modes reported by a shipped
+analytics agent built on a different closed query language. Each one pins a
+rule RFC v0 already determines; the gaps that production found and the RFC
+does *not* determine are written up in
+[`docs/proposals/lessons-from-a-production-agent.md`](../../docs/proposals/lessons-from-a-production-agent.md),
+which is explicitly non-normative.
 
 The RFC currently does not define a complete result-envelope schema. The
 semantic projection above is therefore the byte-comparison target for the

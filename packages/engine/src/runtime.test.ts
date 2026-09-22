@@ -325,7 +325,6 @@ test('aggregate result assembly releases calendar-period dimensions and their nu
       kind: 'timeBucket',
       field: 'docs.created',
       grain: 'week',
-      timezone: 'UTC',
       id: 'week',
     }],
     metrics: [{ op: 'count', id: 'count' }],

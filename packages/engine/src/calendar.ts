@@ -5,7 +5,8 @@ import type { InstantValue, SafeInteger } from '@agql/schemas';
 import { fail, semanticError } from './errors.ts';
 import type { EngineResult } from './types.ts';
 
-export type CalendarUnit = 'day' | 'week' | 'month' | 'quarter' | 'year';
+/** RFC v0 §5.1 relative units. Grains are a separate vocabulary (§4.1). */
+export type CalendarUnit = 'day' | 'week' | 'month';
 
 function dateFromAnchor(anchor: InstantValue): Date {
   return new Date(anchor);
@@ -48,8 +49,6 @@ function shiftMonths(source: Date, months: number): Date {
 
 function shift(source: Date, amount: number, unit: CalendarUnit): Date {
   if (unit === 'month') return shiftMonths(source, amount);
-  if (unit === 'quarter') return shiftMonths(source, amount * 3);
-  if (unit === 'year') return shiftMonths(source, amount * 12);
   const result = new Date(source.getTime());
   result.setUTCDate(result.getUTCDate() + amount * (unit === 'week' ? 7 : 1));
   return result;
@@ -58,8 +57,6 @@ function shift(source: Date, amount: number, unit: CalendarUnit): Date {
 function periodStart(anchor: Date, unit: CalendarUnit): Date {
   const year = anchor.getUTCFullYear();
   const month = anchor.getUTCMonth();
-  if (unit === 'year') return utcDate(year, 0, 1);
-  if (unit === 'quarter') return utcDate(year, Math.floor(month / 3) * 3, 1);
   if (unit === 'month') return utcDate(year, month, 1);
   const day = utcDate(year, month, anchor.getUTCDate());
   if (unit === 'day') return day;
@@ -98,7 +95,21 @@ function localWallTimeToUtc(value: Date, timezone: string): Date {
   const observedAsUtc = Date.UTC(
     observed[0], observed[1] - 1, observed[2], observed[3], observed[4], observed[5],
   );
-  return new Date(candidate - (observedAsUtc - candidate));
+  // `zonedParts` reports whole seconds, so the zone offset must be measured
+  // against the candidate truncated to the same resolution. Comparing it with
+  // the untruncated candidate would fold a sub-second anchor into the offset
+  // and shift the boundary by that remainder.
+  const wholeSeconds = Math.floor(candidate / 1000) * 1000;
+  return new Date(candidate - (observedAsUtc - wholeSeconds));
+}
+
+/** The anchor's civil date and time in `timezone`, retaining its sub-second part. */
+function wallClock(value: Date, timezone: string): Date {
+  const parts = zonedParts(value, timezone);
+  return utcDate(
+    parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5],
+    value.getUTCMilliseconds(),
+  );
 }
 
 function instant(date: Date, path: string): EngineResult<InstantValue> {
@@ -141,22 +152,23 @@ export function compileRelativeRange(
       ));
     }
     const numericAmount: number = amount;
-    startDate = shift(anchorDate, -numericAmount, unit);
+    // RFC v0 §5.1: relative units subtract civil calendar units in the catalog
+    // timezone while preserving local time. Subtracting elapsed absolute time
+    // instead moves the boundary by the DST delta, so a one-day window across a
+    // transition would span a fixed 24 hours rather than the 23 or 25 the civil
+    // day actually has.
+    startDate = shift(wallClock(anchorDate, timezone), -numericAmount, unit);
     // `inLast` is inclusive of the explicit anchor, so use the next millisecond
     // as its exclusive boundary.
     end = instant(new Date(anchorDate.getTime() + 1), path);
   } else {
-    const parts = zonedParts(anchorDate, timezone);
-    const wallAnchor = utcDate(
-      parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5],
-    );
-    const currentStart = periodStart(wallAnchor, unit);
+    const currentStart = periodStart(wallClock(anchorDate, timezone), unit);
     startDate = op === 'inPrevious' ? shift(currentStart, -1, unit) : currentStart;
     end = instant(localWallTimeToUtc(
       op === 'inPrevious' ? currentStart : shift(currentStart, 1, unit), timezone,
     ), path);
   }
-  const startDateUtc = op === 'inLast' ? startDate : localWallTimeToUtc(startDate, timezone);
+  const startDateUtc = localWallTimeToUtc(startDate, timezone);
   const start = instant(startDateUtc, path);
   if (!start.ok) return start;
   if (!end.ok) return end;

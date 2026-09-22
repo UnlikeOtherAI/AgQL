@@ -16,6 +16,7 @@ import type {
   ResolvedMetric,
   ResolvedOutputPredicate,
   ResolvedPredicate,
+  ResolvedValueType,
   TypedValue,
 } from '@agql/contracts';
 
@@ -208,11 +209,48 @@ function numericFieldValues(
     .filter((value) => !isNull(value));
 }
 
-function decimalAtScale(value: TypedValue, scale: number | undefined): TypedValue {
-  if (value.kind !== 'decimal' || scale === undefined) return value;
-  const [integer, fraction = ''] = value.value.split('.');
+function padToScale(value: CanonicalDecimal, scale: number): CanonicalDecimal {
+  const [integer, fraction = ''] = value.split('.');
   const suffix = scale === 0 ? '' : `.${fraction.padEnd(scale, '0')}`;
-  return { kind: 'decimal', value: `${integer ?? '0'}${suffix}` as CanonicalDecimal };
+  return `${integer ?? '0'}${suffix}` as CanonicalDecimal;
+}
+
+/**
+ * RFC §2.2/§2.3 output scales. Money carries the same declared scale as a
+ * decimal and pads identically; only its currency object travels alongside.
+ */
+function decimalAtScale(value: TypedValue, scale: number | undefined): TypedValue {
+  if (scale === undefined) return value;
+  if (value.kind === 'decimal') {
+    return { kind: 'decimal', value: padToScale(value.value, scale) };
+  }
+  if (value.kind === 'money') {
+    return {
+      kind: 'money',
+      value: { amount: padToScale(value.value.amount, scale), currency: value.value.currency },
+    };
+  }
+  return value;
+}
+
+/**
+ * §2.2: `sum(decimal(p,s))` keeps the declared scale and a variable decimal
+ * keeps its minimal canonical scale. §2.3 applies the same rule to money.
+ */
+function sumScale(type: ResolvedValueType): number | undefined {
+  if (type.kind !== 'decimal' && type.kind !== 'money') return undefined;
+  return type.scale;
+}
+
+/**
+ * §2.2: `avg(decimal)` is `decimal(38,max(input scale,9))` and a variable input
+ * uses scale 9. §2.3 gives money the same rule, so a variable-scale money
+ * average is nine fractional digits rather than its minimal canonical form.
+ */
+function averageScale(type: ResolvedValueType): number | undefined {
+  if (type.kind === 'integer') return 9;
+  if (type.kind === 'decimal' || type.kind === 'money') return Math.max(type.scale ?? 9, 9);
+  return undefined;
 }
 
 function sumValues(valuesToSum: readonly TypedValue[]): TypedValue {
@@ -298,16 +336,12 @@ function aggregateValue(
     const distinct = new Set(fieldValues.map(typedValueKey));
     return { kind: 'integer', value: SafeIntegerSchema.parse(distinct.size) };
   }
-  if (expression.op === 'sum') return decimalAtScale(
-    sumValues(fieldValues),
-    expression.field.type.kind === 'decimal' ? expression.field.type.scale : undefined,
-  );
-  if (expression.op === 'avg') return decimalAtScale(
-    averageValues(fieldValues),
-    expression.field.type.kind === 'decimal'
-      ? Math.max(expression.field.type.scale ?? 9, 9)
-      : undefined,
-  );
+  if (expression.op === 'sum') {
+    return decimalAtScale(sumValues(fieldValues), sumScale(expression.field.type));
+  }
+  if (expression.op === 'avg') {
+    return decimalAtScale(averageValues(fieldValues), averageScale(expression.field.type));
+  }
   const first = fieldValues[0];
   if (first === undefined) return { kind: 'null', value: null };
   return fieldValues.slice(1).reduce((best, item) => {

@@ -11,19 +11,22 @@ test('exact suite accounts for every fixture and preserves explicit extension bl
   async () => {
   const execution = await runExactSuite(corpusRoot, createSqliteExactDriver());
 
-  assert.equal(execution.report.totals.total, 39);
+  assert.equal(execution.report.totals.total, 45);
   assert.equal(
     execution.report.totals.pass
       + execution.report.totals.fail
       + execution.report.totals.blocked
       + execution.report.totals.undetermined,
-    39,
+    45,
   );
-  const calendar = execution.report.fixtures.find((fixture) =>
-    fixture.id === 'exact.aggregate.calendar-day-dst-spring');
-  assert.equal(calendar?.outcome.status, 'blocked');
-  if (calendar?.outcome.status !== 'blocked') assert.fail('Expected calendar blocker.');
-  assert.equal(calendar.outcome.capability, 'calendar-period-adapter-values');
+  for (const id of [
+    'exact.aggregate.calendar-day-dst-spring',
+    'exact.aggregate.calendar-fiscal-day-dst-fall',
+    'exact.aggregate.calendar-week-start',
+  ]) {
+    const calendar = execution.report.fixtures.find((fixture) => fixture.id === id);
+    assert.equal(calendar?.outcome.status, 'pass');
+  }
   const receiptContract = execution.report.fixtures.find((fixture) =>
     fixture.id === 'exact.records.decimal-precision-scale-boundaries');
   assert.equal(receiptContract?.outcome.status, 'blocked');

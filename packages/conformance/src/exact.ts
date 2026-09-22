@@ -49,18 +49,6 @@ const BLOCKERS: Readonly<Record<string, ExactBlocker>> = {
     capability: 'per-record-cas-outcomes',
     reason: 'Per-record ingest outcomes are owned by the concurrent contract task.',
   },
-  'exact.aggregate.calendar-day-dst-spring': {
-    capability: 'calendar-period-adapter-values',
-    reason: 'Calendar-period adapter values are owned by the concurrent contract task.',
-  },
-  'exact.aggregate.calendar-fiscal-day-dst-fall': {
-    capability: 'calendar-period-adapter-values',
-    reason: 'Calendar-period adapter values are owned by the concurrent contract task.',
-  },
-  'exact.aggregate.calendar-week-start': {
-    capability: 'calendar-period-adapter-values',
-    reason: 'Calendar-period adapter values are owned by the concurrent contract task.',
-  },
 };
 
 export interface ExactSuiteExecution {

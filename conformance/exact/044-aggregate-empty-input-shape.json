@@ -1,0 +1,78 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.aggregate.empty-input-shape",
+  "rfc": ["§2", "§5", "§11"],
+  "rule": "Over an empty input count and countDistinct are 0 while sum, avg, min, max and ratio are null; with no dimensions one group is still emitted, and with dimensions none is. No rows and zero are different answers.",
+  "requiresProfile": "aggregate.v0",
+  "catalog": {
+    "version": "cat-exact-044",
+    "datasets": [{
+      "id": "orders",
+      "description": "Orders whose eligible set a predicate can empty.",
+      "idField": "orders.id",
+      "profiles": ["aggregate.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "orders.id", "description": "Stable order id.", "kind": "id", "nullable": false},
+        {"id": "orders.region", "description": "Order region.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"},
+        {"id": "orders.amount", "description": "Order amount.", "kind": "decimal", "precision": 8, "scale": 2, "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["aggregate.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "o-1", "region": "north", "amount": "10.00"},
+    {"id": "o-2", "region": "south", "amount": "20.00"}
+  ],
+  "queries": {
+    "ungrouped": {
+      "version": "0",
+      "mode": "aggregate",
+      "from": "orders",
+      "where": {"kind": "predicate", "field": "orders.region", "op": "eq", "value": "west"},
+      "dimensions": [],
+      "metrics": [
+        {"id": "n", "op": "count"},
+        {"id": "regions", "op": "countDistinct", "field": "orders.region"},
+        {"id": "total", "op": "sum", "field": "orders.amount"},
+        {"id": "mean", "op": "avg", "field": "orders.amount"},
+        {"id": "lowest", "op": "min", "field": "orders.amount"},
+        {"id": "highest", "op": "max", "field": "orders.amount"},
+        {"id": "per_order", "op": "ratio", "numerator": "total", "denominator": "n"}
+      ],
+      "order": [{"by": "n", "dir": "asc"}],
+      "take": 10
+    },
+    "grouped": {
+      "version": "0",
+      "mode": "aggregate",
+      "from": "orders",
+      "where": {"kind": "predicate", "field": "orders.region", "op": "eq", "value": "west"},
+      "dimensions": [{"kind": "field", "field": "orders.region", "id": "region"}],
+      "metrics": [
+        {"id": "n", "op": "count"},
+        {"id": "total", "op": "sum", "field": "orders.amount"}
+      ],
+      "order": [{"by": "region", "dir": "asc"}],
+      "take": 10
+    }
+  },
+  "expected": {
+    "outcome": "paired-success",
+    "assertions": [
+      "The eligible set is empty for both queries; no seeded row is in region west.",
+      "ungrouped emits exactly one group because the query declares no dimensions.",
+      "count and countDistinct read 0 over that empty input; sum, avg, min and max read null.",
+      "per_order is null because its denominator is zero, and its group is retained rather than dropped.",
+      "grouped emits no groups at all: a dimension with no contributing rows produces no group, and is never zero-filled."
+    ],
+    "semantic": {
+      "ungrouped": {"groups": [{"n": 0, "regions": 0, "total": null, "mean": null, "lowest": null, "highest": null, "per_order": null}]},
+      "grouped": {"groups": []}
+    },
+    "sourceQueryHashes": {
+      "ungrouped": "sha256:5d428df7e730c7b971b88d8eac463705fb54f3a59cc7ec52b053ec63c4711a17",
+      "grouped": "sha256:fabaa59fa28304f541d0a28eac5af5a57ce0ddce64e709613f2bbd5118935aae"
+    }
+  }
+}

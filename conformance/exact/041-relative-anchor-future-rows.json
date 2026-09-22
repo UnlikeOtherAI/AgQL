@@ -1,0 +1,52 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.relative-anchor-future-rows",
+  "rfc": ["§3", "§5", "§11"],
+  "rule": "inCurrent selects the whole calendar period around the anchor and therefore includes rows dated after the anchor; only inLast caps at the anchor. The two operators must not be conflated in either direction.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-041",
+    "calendar": {"timezone": "UTC", "timezoneDatabase": "fixed-offset", "weekStart": "monday", "fiscalDayStart": "00:00:00"},
+    "datasets": [{
+      "id": "events",
+      "description": "Events before, around, and after an anchor inside one calendar month.",
+      "idField": "events.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "events.id", "description": "Stable event id.", "kind": "id", "nullable": false},
+        {"id": "events.at", "description": "UTC event instant.", "kind": "instant", "precision": "second", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "a-before-both-windows", "at": "2024-01-31T23:59:59Z"},
+    {"id": "b-inside-both-windows", "at": "2024-03-01T00:00:00Z"},
+    {"id": "c-after-anchor-inside-period", "at": "2024-03-31T23:59:59Z"},
+    {"id": "d-next-period", "at": "2024-04-01T00:00:00Z"}
+  ],
+  "queries": {
+    "inCurrentMonth": {"version": "0", "mode": "records", "from": "events", "select": ["events.id"], "where": {"kind": "predicate", "field": "events.at", "op": "inCurrent", "unit": "month"}, "order": [{"by": "events.id", "dir": "asc"}], "take": 10},
+    "inLastMonth": {"version": "0", "mode": "records", "from": "events", "select": ["events.id"], "where": {"kind": "predicate", "field": "events.at", "op": "inLast", "amount": 1, "unit": "month"}, "order": [{"by": "events.id", "dir": "asc"}], "take": 10}
+  },
+  "execution": {"anchor": "2024-03-15T12:00:00Z"},
+  "expected": {
+    "outcome": "paired-success",
+    "assertions": [
+      "inCurrentMonth is [2024-03-01T00:00:00Z, 2024-04-01T00:00:00Z) and contains c-after-anchor-inside-period even though that row is dated after the anchor.",
+      "inLastMonth is [2024-02-15T12:00:00Z, 2024-03-15T12:00:00Z] and excludes the same row because a rolling window is capped at the anchor.",
+      "An implementation that silently caps inCurrent at the anchor loses c-after-anchor-inside-period.",
+      "An implementation that leaves inLast forward-unbounded gains it.",
+      "Both windows are derived from execution.anchor alone; neither reads a clock."
+    ],
+    "semantic": {
+      "inCurrentMonth": {"rows": [{"events.id": "b-inside-both-windows"}, {"events.id": "c-after-anchor-inside-period"}]},
+      "inLastMonth": {"rows": [{"events.id": "b-inside-both-windows"}]}
+    },
+    "sourceQueryHashes": {
+      "inCurrentMonth": "sha256:50d73ea3bbb0eb2d17cc43648dc62f9d2ab07ae9f000bcffc2c209f68d0ec7b2",
+      "inLastMonth": "sha256:cf31cde5e8ef14983a4607ad3ef73ed8ece1a39a0b833e7edc50cc98a0dfe4b4"
+    }
+  }
+}
