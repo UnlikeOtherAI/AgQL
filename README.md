@@ -100,6 +100,7 @@ AgQL MCP Profile    the normative agent-facing protocol binding
 | [docs/example-session.md](docs/example-session.md) | An agent working through the surface end to end |
 | [docs/rollout.md](docs/rollout.md) | Non-normative: the author's own deployment plan. Nothing here constrains what AgQL is |
 | [conformance/](conformance/) | Fixture corpora. `encoding/` (canonical-form pairs + rejections) is the first suite |
+| [docs/proposals/](docs/proposals/) | Non-normative proposals. Gaps found against the RFC, with the evidence for each; nothing here is in force |
 
 ## Status
 
@@ -107,25 +108,30 @@ AgQL MCP Profile    the normative agent-facing protocol binding
 enough to build against, the TypeScript runtime and its two adapters are
 implemented, and the conformance suites execute against both.
 
-Current conformance, measured against a live PostgreSQL + pgvector database:
+Current conformance, measured on the SQLite adapter, which needs no external
+service:
 
 | Suite | Pass | Fail | Blocked |
 |---|---:|---:|---:|
 | encoding | 12 | 0 | 0 |
-| exact (SQLite) | 35 | 0 | 4 |
-| exact (PostgreSQL) | 35 | 0 | 4 |
-| portability (SQLite ↔ PostgreSQL) | 35 | 0 | 4 |
+| exact (SQLite) | 44 | 0 | 1 |
 | receipts | 11 | 0 | 0 |
 | retrieval | 3 | 0 | 4 |
-| security probes (per adapter) | 13 | 0 | 0 |
-| **total** | **157** | **0** | **16** |
+| security probes (SQLite) | 13 | 0 | 0 |
+| **total** | **83** | **0** | **5** |
 
-Thirty-five exact fixtures return byte-identical results across two materially
-different adapters, and 6,656 seeded adversarial security cases find zero
-authorization violations. The 16 blocked fixtures are honest gaps, not skips:
-three calendar aggregates and decimal precision/scale boundaries, plus the four
-retrieval filter-selectivity families whose recall thresholds RFC §11 says must
-come from first cross-adapter measurement rather than being invented up front.
+The 5 blocked fixtures are honest gaps, not skips: per-record ingest
+compare-and-swap outcomes, plus the four retrieval filter-selectivity families
+whose recall thresholds RFC §11 says must come from first cross-adapter
+measurement rather than being invented up front. 3,328 seeded adversarial
+security cases find zero authorization violations on this adapter.
+
+The exact (PostgreSQL) and portability suites need a live PostgreSQL + pgvector
+database, so they are not part of an offline run. They were last measured at 35
+pass / 0 fail / 4 blocked across an exact corpus of 39 fixtures — byte-identical
+results across two materially different adapters — and the six fixtures added
+since have not yet been run against PostgreSQL. Re-measure with
+`DATABASE_URL=… pnpm conformance --adapter both`.
 
 Nothing here is stable yet. The acceptance gates in RFC §12 are what "v0" will
 mean, and they are deliberately falsifiable: if the reference implementation
