@@ -11,13 +11,13 @@ test('exact suite accounts for every fixture and preserves explicit extension bl
   async () => {
   const execution = await runExactSuite(corpusRoot, createSqliteExactDriver());
 
-  assert.equal(execution.report.totals.total, 39);
+  assert.equal(execution.report.totals.total, 45);
   assert.equal(
     execution.report.totals.pass
       + execution.report.totals.fail
       + execution.report.totals.blocked
       + execution.report.totals.undetermined,
-    39,
+    45,
   );
   const calendar = execution.report.fixtures.find((fixture) =>
     fixture.id === 'exact.aggregate.calendar-day-dst-spring');

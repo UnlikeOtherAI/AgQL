@@ -1,0 +1,61 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.aggregate.money-exact-scale-and-rounding",
+  "rfc": ["§2", "§5", "§11"],
+  "rule": "Same-currency money aggregates are computed on exact decimals, never through a binary float: sum keeps the minimal canonical scale of the exact total, and avg is rounded exactly once to scale 9 using round-half-to-even and is emitted at that declared scale. An integer average carries the same declared scale.",
+  "requiresProfile": "aggregate.v0",
+  "catalog": {
+    "version": "cat-exact-042",
+    "datasets": [{
+      "id": "payments",
+      "description": "Single-currency payments whose exact totals a binary float cannot represent.",
+      "idField": "payments.id",
+      "profiles": ["aggregate.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "payments.id", "description": "Stable payment id.", "kind": "id", "nullable": false},
+        {"id": "payments.bucket", "description": "Grouping bucket.", "kind": "text", "nullable": false, "normalization": "NFC", "collation": "unicode-codepoint-v0"},
+        {"id": "payments.amount", "description": "Payment amount and currency.", "kind": "money", "nullable": false},
+        {"id": "payments.units", "description": "Units paid for.", "kind": "integer", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["aggregate.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "p-1", "bucket": "float-trap", "amount": {"amount": "1", "currency": "CZK"}, "units": 1},
+    {"id": "p-2", "bucket": "float-trap", "amount": {"amount": "0.000000000000000001", "currency": "CZK"}, "units": 1},
+    {"id": "p-3", "bucket": "tie-odd", "amount": {"amount": "0.000000001", "currency": "CZK"}, "units": 1},
+    {"id": "p-4", "bucket": "tie-odd", "amount": {"amount": "0.000000002", "currency": "CZK"}, "units": 2},
+    {"id": "p-5", "bucket": "tie-even", "amount": {"amount": "0.000000002", "currency": "CZK"}, "units": 2},
+    {"id": "p-6", "bucket": "tie-even", "amount": {"amount": "0.000000003", "currency": "CZK"}, "units": 5}
+  ],
+  "query": {
+    "version": "0",
+    "mode": "aggregate",
+    "from": "payments",
+    "dimensions": [{"kind": "field", "field": "payments.bucket", "id": "bucket"}],
+    "metrics": [
+      {"id": "total", "op": "sum", "field": "payments.amount"},
+      {"id": "mean", "op": "avg", "field": "payments.amount"},
+      {"id": "mean_units", "op": "avg", "field": "payments.units"}
+    ],
+    "order": [{"by": "bucket", "dir": "asc"}],
+    "take": 10
+  },
+  "expected": {
+    "outcome": "success",
+    "assertions": [
+      "float-trap totals 1 plus 1e-18 exactly; IEEE 754 binary64 cannot hold that value and would report the total as 1.",
+      "tie-odd averages 0.000000003 over two rows, a tie at scale 9 whose preceding digit is odd, so half-to-even rounds up to 0.000000002.",
+      "tie-even averages 0.000000005 over two rows, a tie at scale 9 whose preceding digit is even, so half-to-even keeps 0.000000002; round-half-away-from-zero would report 0.000000003.",
+      "Rounding is applied once, to the division result, and never to an operand.",
+      "Every money result retains its currency object.",
+      "mean_units averages integers and is emitted at scale 9 too: a whole-number average reads 1.000000000, never 1."
+    ],
+    "semantic": {"groups": [
+      {"bucket": "float-trap", "total": {"amount": "1.000000000000000001", "currency": "CZK"}, "mean": {"amount": "0.500000000", "currency": "CZK"}, "mean_units": "1.000000000"},
+      {"bucket": "tie-even", "total": {"amount": "0.000000005", "currency": "CZK"}, "mean": {"amount": "0.000000002", "currency": "CZK"}, "mean_units": "3.500000000"},
+      {"bucket": "tie-odd", "total": {"amount": "0.000000003", "currency": "CZK"}, "mean": {"amount": "0.000000002", "currency": "CZK"}, "mean_units": "1.500000000"}
+    ]}
+  }
+}
