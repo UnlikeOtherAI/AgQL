@@ -1,0 +1,54 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.date-field-is-not-an-instant",
+  "rfc": ["§2", "§4", "§5", "§11"],
+  "rule": "A date field is a calendar day, not an instant: its bounds are compared as Gregorian dates and are never shifted by the catalog timezone or by fiscalDayStart, even across a DST transition.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-045",
+    "calendar": {"timezone": "America/New_York", "timezoneDatabase": "2024a", "weekStart": "monday", "fiscalDayStart": "04:00:00"},
+    "datasets": [{
+      "id": "bookings",
+      "description": "Bookings whose service day is a calendar date across a DST transition.",
+      "idField": "bookings.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "bookings.id", "description": "Stable booking id.", "kind": "id", "nullable": false},
+        {"id": "bookings.serviceDay", "description": "Calendar day the service is booked for.", "kind": "date", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "b-09", "serviceDay": "2024-03-09"},
+    {"id": "b-10", "serviceDay": "2024-03-10"},
+    {"id": "b-11", "serviceDay": "2024-03-11"},
+    {"id": "b-12", "serviceDay": "2024-03-12"}
+  ],
+  "query": {
+    "version": "0",
+    "mode": "records",
+    "from": "bookings",
+    "select": ["bookings.id", "bookings.serviceDay"],
+    "where": {"kind": "and", "items": [
+      {"kind": "predicate", "field": "bookings.serviceDay", "op": "gte", "value": "2024-03-10"},
+      {"kind": "predicate", "field": "bookings.serviceDay", "op": "lt", "value": "2024-03-12"}
+    ]},
+    "order": [{"by": "bookings.serviceDay", "dir": "asc"}, {"by": "bookings.id", "dir": "asc"}],
+    "take": 10
+  },
+  "expected": {
+    "outcome": "success",
+    "assertions": [
+      "The catalog declares a 04:00 fiscal day start and a DST-observing timezone; neither may move a date-typed bound.",
+      "2024-03-10 is the local spring-forward day, so any conversion of these dates through instants would move a boundary row.",
+      "A -04:00 fiscal shift would admit b-09; a +1 day shift would admit b-12 and drop b-10.",
+      "Result values are returned as the same YYYY-MM-DD calendar dates that were stored."
+    ],
+    "semantic": {"rows": [
+      {"bookings.id": "b-10", "bookings.serviceDay": "2024-03-10"},
+      {"bookings.id": "b-11", "bookings.serviceDay": "2024-03-11"}
+    ]}
+  }
+}

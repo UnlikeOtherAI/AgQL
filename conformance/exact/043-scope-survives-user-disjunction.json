@@ -1,0 +1,49 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.security.scope-survives-user-disjunction",
+  "rfc": ["§6", "§9", "§11"],
+  "rule": "The resolved scope predicate is conjoined outside every user boolean tree; an or branch naming an out-of-scope partition widens nothing and reads nothing.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-043",
+    "datasets": [{
+      "id": "tenant_rows",
+      "description": "Tenant-partitioned rows.",
+      "idField": "tenant_rows.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "partition", "dimensions": ["tenant_rows.tenant"]},
+      "fields": [
+        {"id": "tenant_rows.id", "description": "Stable row id.", "kind": "id", "nullable": false},
+        {"id": "tenant_rows.tenant", "description": "Tenant partition code.", "kind": "enum", "nullable": false, "values": [{"code": "a", "label": "A"}, {"code": "b", "label": "B"}]}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:tenant-a", "capabilities": ["records.v0"], "partitions": {"tenant_rows.tenant": ["a"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "a-1", "tenant": "a"},
+    {"id": "a-2", "tenant": "a"},
+    {"id": "b-1", "tenant": "b"},
+    {"id": "b-2", "tenant": "b"}
+  ],
+  "queries": {
+    "mixedDisjunction": {"version": "0", "mode": "records", "from": "tenant_rows", "select": ["tenant_rows.id"], "where": {"kind": "or", "items": [{"kind": "predicate", "field": "tenant_rows.tenant", "op": "eq", "value": "b"}, {"kind": "predicate", "field": "tenant_rows.tenant", "op": "eq", "value": "a"}]}, "order": [{"by": "tenant_rows.id", "dir": "asc"}], "take": 10},
+    "escapeOnlyDisjunction": {"version": "0", "mode": "records", "from": "tenant_rows", "select": ["tenant_rows.id"], "where": {"kind": "or", "items": [{"kind": "predicate", "field": "tenant_rows.tenant", "op": "eq", "value": "b"}, {"kind": "predicate", "field": "tenant_rows.id", "op": "eq", "value": "b-2"}]}, "order": [{"by": "tenant_rows.id", "dir": "asc"}], "take": 10}
+  },
+  "expected": {
+    "outcome": "paired-success",
+    "assertions": [
+      "The compiled plan is scope AND (user or), never (scope OR user branch).",
+      "mixedDisjunction satisfies its first branch only for tenant b rows, which stay invisible; the answer is the tenant a rows alone.",
+      "escapeOnlyDisjunction names only out-of-scope rows and therefore reads nothing at all.",
+      "Neither query reports that a branch matched rows it may not see."
+    ],
+    "semantic": {
+      "mixedDisjunction": {"rows": [{"tenant_rows.id": "a-1"}, {"tenant_rows.id": "a-2"}]},
+      "escapeOnlyDisjunction": {"rows": []}
+    },
+    "sourceQueryHashes": {
+      "mixedDisjunction": "sha256:49a605f925882dbb7d0dc8e6a2f0d9573d85b5586073897fc2dd0d0d590dda55",
+      "escapeOnlyDisjunction": "sha256:9200d56a90ee341bcb98218e13f8650fc641dbb64689dfcae2df081014e97531"
+    }
+  }
+}
