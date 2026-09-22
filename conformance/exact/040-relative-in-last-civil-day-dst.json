@@ -1,0 +1,44 @@
+{
+  "format": "agql-exact-fixture/0.1",
+  "id": "exact.records.relative-in-last-civil-day-dst",
+  "rfc": ["§4", "§5", "§11"],
+  "rule": "inLast subtracts civil calendar units in the catalog timezone while preserving local time; it never subtracts a fixed elapsed duration, so a one-day window across a spring-forward transition spans 23 elapsed hours.",
+  "requiresProfile": "records.v0",
+  "catalog": {
+    "version": "cat-exact-040",
+    "calendar": {"timezone": "America/New_York", "timezoneDatabase": "2024a", "weekStart": "monday", "fiscalDayStart": "00:00:00"},
+    "datasets": [{
+      "id": "events",
+      "description": "Events around the 2024 New York spring-forward transition.",
+      "idField": "events.id",
+      "profiles": ["records.v0"],
+      "rowScope": {"kind": "none", "reason": "Public conformance seed."},
+      "fields": [
+        {"id": "events.id", "description": "Stable event id.", "kind": "id", "nullable": false},
+        {"id": "events.at", "description": "UTC event instant.", "kind": "instant", "precision": "second", "nullable": false}
+      ]
+    }]
+  },
+  "scope": {"principal": "fixture:reader", "capabilities": ["records.v0"], "partitions": {"fixture": ["all"]}, "budgets": {"rows": 10}, "expiresAt": "2099-01-01T00:00:00Z"},
+  "seed": [
+    {"id": "after-anchor", "at": "2024-03-11T05:30:01Z"},
+    {"id": "at-anchor", "at": "2024-03-11T05:30:00Z"},
+    {"id": "civil-lower-bound", "at": "2024-03-10T06:30:00Z"},
+    {"id": "elapsed-duration-only", "at": "2024-03-10T05:45:00Z"},
+    {"id": "inside", "at": "2024-03-10T18:00:00Z"}
+  ],
+  "query": {"version": "0", "mode": "records", "from": "events", "select": ["events.id"], "where": {"kind": "predicate", "field": "events.at", "op": "inLast", "amount": 1, "unit": "day"}, "order": [{"by": "events.id", "dir": "asc"}], "take": 10},
+  "execution": {"anchor": "2024-03-11T05:30:00Z"},
+  "expected": {
+    "outcome": "success",
+    "assertions": [
+      "The anchor is 2024-03-11 01:30 local (UTC-04:00, after the transition).",
+      "One civil day earlier is 2024-03-10 01:30 local (UTC-05:00, before the transition), which is 2024-03-10T06:30:00Z.",
+      "The window therefore spans 23 elapsed hours, not 24.",
+      "elapsed-duration-only is 2024-03-10 00:45 local and is excluded; an implementation that subtracts a fixed 24 hours of absolute time includes it.",
+      "civil-lower-bound is exactly the inclusive lower boundary and at-anchor is exactly the inclusive upper boundary.",
+      "after-anchor is one second past the anchor and is excluded because inLast caps at the anchor."
+    ],
+    "semantic": {"rows": [{"events.id": "at-anchor"}, {"events.id": "civil-lower-bound"}, {"events.id": "inside"}]}
+  }
+}
