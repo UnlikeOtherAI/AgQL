@@ -149,7 +149,9 @@ contract.
 
 ## Production images
 
-GitHub Actions publishes `ghcr.io/unlikeotherai/agql:<full-commit-sha>` from `main`.
-The host runs `./deploy/deploy.sh` to pull that checkout's image and verify readiness
-and an authenticated query. Image compilation runs on GitHub runners. See the
-[deployment prerequisites](deploy/README.md#prerequisites) for GHCR access.
+GitHub Actions builds a Docker image archive for each release commit and retains
+it as an Actions artifact for 30 days. An operator downloads, verifies and transfers
+the archive over SSH, then loads it on the host. `./deploy/deploy.sh` verifies the
+preloaded image's revision and platform, starts it by immutable content ID, and
+checks readiness and an authenticated query. No API registry pull or host image
+compilation is required. See the [operator steps](deploy/README.md#first-deployment).
