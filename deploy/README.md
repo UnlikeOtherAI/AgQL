@@ -20,6 +20,11 @@ schema or database roles are unavailable. Both the API container healthcheck and
   [`Caddyfile.snippet`](Caddyfile.snippet), pointing at the host.
 - `git`, `openssl`, and `curl` installed on the host.
 - Read access to the AgQL repository.
+- A published API image for the selected commit in `ghcr.io/unlikeotherai/agql`.
+  `.github/workflows/images.yml` builds it on a GitHub runner after a push to `main`,
+  or on manual dispatch. The Dockerfile runs lint and typecheck during the build.
+  Make the GHCR package public for anonymous pulls, or have the operator authenticate
+  Docker on the host with package read access. The workflow needs package write permission.
 
 Confirm that the shared network is available before continuing:
 
@@ -85,11 +90,24 @@ does send a one-year HSTS header with `includeSubDomains`; clients must still
 use `https://` on their first connection, because HSTS cannot protect a bearer
 key already sent over plaintext HTTP.
 
-Run the normal deploy command:
+Wait for the production image workflow for the selected commit to succeed, then run the normal deploy command:
 
 ```sh
 ./deploy/deploy.sh
 ```
+
+The command pulls the image tagged with the checkout's full commit SHA; it never
+compiles source on the server. A missing or inaccessible image fails before any
+container is replaced. Existing manual `--seed` behavior is preserved. To select an
+immutable digest from the workflow summary, use:
+
+```sh
+AGQL_IMAGE=ghcr.io/unlikeotherai/agql@sha256:<published-digest> ./deploy/deploy.sh
+```
+
+For manual recovery, select a previously published digest and its matching checkout
+after checking schema compatibility. Deployments do not automatically roll the
+database or containers back. Commit-tagged images must remain available for recovery.
 
 Normal deployment provisions the catalog's PostgreSQL schema before the API can
 become ready. The script waits for `/ready` and then sends an authenticated MCP
@@ -107,6 +125,12 @@ starter `projects` rows on a fresh installation, use:
 `--seed` runs after the normal schema provision and before the same authenticated
 query gate. It is safe to repeat for the supplied starter data, but it is not a
 data-migration mechanism.
+
+For direct Compose commands below, first select the checkout image:
+
+```sh
+export AGQL_IMAGE="ghcr.io/unlikeotherai/agql:$(git rev-parse HEAD)"
+```
 
 ## Verification
 

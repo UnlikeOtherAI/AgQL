@@ -15,6 +15,11 @@ export default tseslint.config(
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
   {
+    files: ['deploy/*.test.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: { globals: { process: 'readonly' } },
+  },
+  {
     files: ['**/*.ts'],
     languageOptions: {
       parserOptions: {
