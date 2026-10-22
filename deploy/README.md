@@ -115,7 +115,10 @@ cd "/srv/agql/releases/$revision"
 sha256sum -c SHA256SUMS
 [[ "$(cat revision.txt)" == "$revision" ]]
 gzip -dc agql-images.tar.gz | docker load
-[[ "$(docker image inspect --format '{{.Id}}' "agql-api:$revision")" == "$(cat image-id.txt)" ]]
+loaded_config="$(docker save "agql-api:$revision" | tar -xOf - manifest.json | python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["Config"].rsplit("/", 1)[-1])')"
+[[ "sha256:$loaded_config" == "$(cat image-id.txt)" ]]
+[[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "agql-api:$revision")" == linux/amd64 ]]
+[[ "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "agql-api:$revision")" == "$revision" ]]
 cd /srv/agql/AgQL
 git status --short
 git diff --quiet && git diff --cached --quiet || { echo "Preserve tracked work before switching" >&2; exit 1; }
@@ -124,6 +127,11 @@ git switch --detach "$revision"
 ./deploy/deploy.sh
 REMOTE
 ```
+
+`image-id.txt` records the image configuration digest from the runner. Docker
+versions with the containerd image store can report a manifest digest as
+`docker image inspect .Id` after loading the same archive, so the verification
+reads the loaded image's saved configuration digest instead.
 
 Check the host worktree status before executing the remote block's checkout;
 preserve any in-progress work. The script's normal image selection is
