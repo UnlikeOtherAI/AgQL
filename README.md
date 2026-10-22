@@ -146,3 +146,10 @@ instructions are in [deploy/README.md](deploy/README.md).
 
 MIT — see [LICENSE](LICENSE). A contract that isn't freely implementable isn't a
 contract.
+
+## Production images
+
+GitHub Actions publishes `ghcr.io/unlikeotherai/agql:<full-commit-sha>` from `main`.
+The host runs `./deploy/deploy.sh` to pull that checkout's image and verify readiness
+and an authenticated query. Image compilation runs on GitHub runners. See the
+[deployment prerequisites](deploy/README.md#prerequisites) for GHCR access.
