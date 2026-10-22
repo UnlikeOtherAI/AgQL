@@ -16,9 +16,11 @@ usage() {
   cat <<'USAGE'
 Usage: ./deploy/deploy.sh [--seed]
 
-Builds and starts AgQL with Docker Compose, waits for database-backed readiness,
+Pulls the published image for this checkout and starts AgQL with Docker Compose,
+waits for database-backed readiness,
 then confirms that an authenticated MCP run_query succeeds.
   --seed  Run the workspace starter seed command before the run_query check.
+Set AGQL_IMAGE to an explicit published image digest to deploy another revision.
 USAGE
 }
 
@@ -84,16 +86,26 @@ while IFS= read -r name; do
 done < <(required_env_names)
 
 cd "${repo_dir}"
+# Manual deployments select the checked-out commit, never a mutable latest tag.
+# An explicit digest/reference supports operators deploying a previously published release.
+revision="$(git rev-parse --verify HEAD)"
+if [[ -z "${AGQL_IMAGE:-}" ]]; then
+  export AGQL_IMAGE="ghcr.io/unlikeotherai/agql:${revision}"
+fi
 compose=(docker compose --env-file "${env_file}" -f "${compose_file}")
 
 echo "Pulling the digest-pinned PostgreSQL image..."
 "${compose[@]}" pull agql-postgres
 
-echo "Building the AgQL API image..."
-"${compose[@]}" build --pull agql-api
+echo "Pulling the published AgQL API image..."
+"${compose[@]}" pull agql-api
+image_revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$AGQL_IMAGE")"
+[[ "$image_revision" == "$revision" ]] || { echo "AgQL image revision does not match this checkout" >&2; exit 1; }
+image_platform="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$AGQL_IMAGE")"
+[[ "$image_platform" == linux/amd64 ]] || { echo "AgQL image must target linux/amd64" >&2; exit 1; }
 
 echo "Starting AgQL..."
-"${compose[@]}" up -d
+"${compose[@]}" up -d --no-build --pull never
 
 container_id="$("${compose[@]}" ps -q agql-api)"
 if [[ -z "${container_id}" ]]; then

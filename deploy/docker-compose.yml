@@ -2,9 +2,7 @@ name: agql
 
 services:
   agql-api:
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    image: ${AGQL_IMAGE:?Run deploy/deploy.sh or set AGQL_IMAGE to a published release image}
     restart: unless-stopped
     # Keep V8's old-space cap below this cgroup limit (see NODE_OPTIONS in .env).
     mem_limit: 512m
