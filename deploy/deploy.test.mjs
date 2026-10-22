@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 for (const scenario of ['normal', 'seed', 'missing-image', 'wrong-revision', 'wrong-platform']) {
-  test(`manual deploy with published image: ${scenario}`, async () => {
+  test(`manual deploy with preloaded image: ${scenario}`, async () => {
     const dir = await mkdtemp(join(process.cwd(), '.deploy-test-'));
     try {
       await mkdir(join(dir, 'deploy'));
@@ -16,18 +16,21 @@ for (const scenario of ['normal', 'seed', 'missing-image', 'wrong-revision', 'wr
       const harness = `
 set -euo pipefail
 export TRACE="$PWD/trace"
-export AGQL_IMAGE='ghcr.io/unlikeotherai/agql@sha256:${'a'.repeat(64)}'
+export AGQL_IMAGE='sha256:${'a'.repeat(64)}'
 export SCENARIO='${scenario}'
+${scenario === 'normal' ? 'unset AGQL_IMAGE' : ''}
 git() { echo ${'b'.repeat(40)}; }
 export -f git
 docker() {
-  echo "$*" >> "$TRACE"
+  echo "$* image=\${AGQL_IMAGE:-unset}" >> "$TRACE"
   case "$*" in
-    *'pull agql-api') [ "$SCENARIO" != missing-image ]; return ;;
-    *'image inspect --format '*org.opencontainers.image.revision*)
-      if [ "$SCENARIO" = wrong-revision ]; then echo wrong; else echo ${'b'.repeat(40)}; fi ;;
-    *'image inspect --format '*'.Os'* )
-      if [ "$SCENARIO" = wrong-platform ]; then echo linux/arm64; else echo linux/amd64; fi ;;
+    *'image inspect '*)
+      if [ "$SCENARIO" = missing-image ]; then return 1; fi
+      case "$*" in
+        *org.opencontainers.image.revision*) if [ "$SCENARIO" = wrong-revision ]; then echo wrong; else echo ${'b'.repeat(40)}; fi ;;
+        *'.Os'*) if [ "$SCENARIO" = wrong-platform ]; then echo linux/arm64; else echo linux/amd64; fi ;;
+        *'.Id'*) echo sha256:${'a'.repeat(64)} ;;
+      esac ;;
     *'ps -q agql-api') echo test-container ;;
     'inspect '*) echo healthy ;;
     *'exec -T agql-api node -') cat >/dev/null ;;
@@ -43,11 +46,12 @@ bash deploy/deploy.sh ${scenario === 'seed' ? '--seed' : ''}
       const rejected = ['missing-image', 'wrong-revision', 'wrong-platform'].includes(scenario);
       assert.equal(result.status, rejected ? 1 : 0, result.stderr);
       assert.doesNotMatch(trace, / build /);
-      assert.match(trace, /pull agql-api/);
+      assert.doesNotMatch(trace, /pull agql-api/);
       if (rejected) {
         assert.doesNotMatch(trace, /up -d/);
       } else {
-        assert.match(trace, /up -d --no-build --pull never/);
+        assert.match(trace, /up -d --no-build --pull never image=sha256:[a-f0-9]{64}/);
+        if (scenario === 'normal') assert.match(trace, /image inspect .*agql-api:b{40}/);
         assert.match(trace, /exec -T agql-api node -/);
         assert.equal(trace.includes('exec -T agql-api pnpm seed'), scenario === 'seed');
       }
@@ -59,7 +63,7 @@ bash deploy/deploy.sh ${scenario === 'seed' ? '--seed' : ''}
 
 test('production Compose has an image-only API and preserves private Postgres storage', async () => {
   const source = (await readFile('deploy/docker-compose.yml', 'utf8')).replace('      - .env', '      - deploy/.env.example');
-  const image = `ghcr.io/unlikeotherai/agql@sha256:${'a'.repeat(64)}`;
+  const image = `sha256:${'a'.repeat(64)}`;
   const result = spawnSync('docker', ['compose', '-f', '-', 'config', '--format', 'json'], {
     input: source, encoding: 'utf8', timeout: 30000,
     env: { ...process.env, AGQL_IMAGE: image, POSTGRES_DB: 'test', POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test' },
@@ -71,4 +75,14 @@ test('production Compose has an image-only API and preserves private Postgres st
   assert.equal(config.services['agql-api'].ports, undefined);
   assert.equal(config.networks.db.internal, true);
   assert.ok(config.services['agql-postgres'].volumes.some(volume => volume.target === '/var/lib/postgresql/data'));
+});
+
+
+test('release workflow produces a downloadable archive without registry credentials', async () => {
+  const workflow = await readFile('.github/workflows/images.yml', 'utf8');
+  assert.match(workflow, /load: true/);
+  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /docker save/);
+  assert.match(workflow, /sha256sum agql-images.tar.gz image-id.txt revision.txt/);
+  assert.doesNotMatch(workflow, /ghcr|login-action|packages: write/);
 });

@@ -16,11 +16,11 @@ usage() {
   cat <<'USAGE'
 Usage: ./deploy/deploy.sh [--seed]
 
-Pulls the published image for this checkout and starts AgQL with Docker Compose,
+Uses the preloaded image for this checkout and starts AgQL with Docker Compose,
 waits for database-backed readiness,
 then confirms that an authenticated MCP run_query succeeds.
   --seed  Run the workspace starter seed command before the run_query check.
-Set AGQL_IMAGE to an explicit published image digest to deploy another revision.
+Set AGQL_IMAGE to a loaded image ID to select an explicit image for this checkout.
 USAGE
 }
 
@@ -87,22 +87,25 @@ done < <(required_env_names)
 
 cd "${repo_dir}"
 # Manual deployments select the checked-out commit, never a mutable latest tag.
-# An explicit digest/reference supports operators deploying a previously published release.
+# An explicit local image ID supports recovery from an archived release.
 revision="$(git rev-parse --verify HEAD)"
 if [[ -z "${AGQL_IMAGE:-}" ]]; then
-  export AGQL_IMAGE="ghcr.io/unlikeotherai/agql:${revision}"
+  export AGQL_IMAGE="agql-api:${revision}"
 fi
 compose=(docker compose --env-file "${env_file}" -f "${compose_file}")
 
-echo "Pulling the digest-pinned PostgreSQL image..."
-"${compose[@]}" pull agql-postgres
-
-echo "Pulling the published AgQL API image..."
-"${compose[@]}" pull agql-api
+echo "Checking the preloaded AgQL API image..."
 image_revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$AGQL_IMAGE")"
 [[ "$image_revision" == "$revision" ]] || { echo "AgQL image revision does not match this checkout" >&2; exit 1; }
 image_platform="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$AGQL_IMAGE")"
 [[ "$image_platform" == linux/amd64 ]] || { echo "AgQL image must target linux/amd64" >&2; exit 1; }
+
+# Resolve the checked tag to its immutable local content ID for Compose startup.
+export AGQL_IMAGE="$(docker image inspect --format '{{.Id}}' "$AGQL_IMAGE")"
+[[ "$AGQL_IMAGE" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Invalid local image content ID" >&2; exit 1; }
+
+echo "Pulling the digest-pinned PostgreSQL image..."
+"${compose[@]}" pull agql-postgres
 
 echo "Starting AgQL..."
 "${compose[@]}" up -d --no-build --pull never

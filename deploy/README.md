@@ -20,11 +20,13 @@ schema or database roles are unavailable. Both the API container healthcheck and
   [`Caddyfile.snippet`](Caddyfile.snippet), pointing at the host.
 - `git`, `openssl`, and `curl` installed on the host.
 - Read access to the AgQL repository.
-- A published API image for the selected commit in `ghcr.io/unlikeotherai/agql`.
-  `.github/workflows/images.yml` builds it on a GitHub runner after a push to `main`,
-  or on manual dispatch. The Dockerfile runs lint and typecheck during the build.
-  Make the GHCR package public for anonymous pulls, or have the operator authenticate
-  Docker on the host with package read access. The workflow needs package write permission.
+- A successful production image archive workflow for the exact checkout commit.
+  `.github/workflows/images.yml` builds Linux amd64 on GitHub runners after a push
+  to `main` or on manual dispatch. PRs validate the same build. The Dockerfile runs
+  lint and typecheck. Release archives remain downloadable for 30 days; retain the
+  downloaded archive if longer recovery retention is required.
+- An operator workstation with GitHub CLI access to Actions artifacts and SSH/SCP
+  access to the host. No container registry access or new host credential is needed.
 
 Confirm that the shared network is available before continuing:
 
@@ -90,24 +92,56 @@ does send a one-year HSTS header with `includeSubDomains`; clients must still
 use `https://` on their first connection, because HSTS cannot protect a bearer
 key already sent over plaintext HTTP.
 
-Wait for the production image workflow for the selected commit to succeed, then run the normal deploy command:
+Wait for the production image archive workflow for the selected commit to succeed.
+Download and transfer the artifact from a trusted operator workstation. Replace
+`RUN_ID` with the successful main-branch or manual production workflow run ID:
 
 ```sh
+run_id=RUN_ID
+revision="$(gh run view "$run_id" --repo UnlikeOtherAI/AgQL --json headSha --jq .headSha)"
+gh run view "$run_id" --repo UnlikeOtherAI/AgQL --json conclusion --jq .conclusion
+# Confirm the result is success and the revision is the intended release.
+mkdir "agql-release-$revision"
+gh run download "$run_id" --repo UnlikeOtherAI/AgQL \
+  --name "agql-image-$revision" --dir "agql-release-$revision"
+(cd "agql-release-$revision" && sha256sum -c SHA256SUMS)
+ssh root@178.105.82.46 "install -d -m 700 /srv/agql/releases/$revision"
+scp "agql-release-$revision/"* "root@178.105.82.46:/srv/agql/releases/$revision/"
+ssh root@178.105.82.46 "bash -s" -- "$revision" <<'REMOTE'
+set -euo pipefail
+revision="$1"
+[[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+cd "/srv/agql/releases/$revision"
+sha256sum -c SHA256SUMS
+[[ "$(cat revision.txt)" == "$revision" ]]
+gzip -dc agql-images.tar.gz | docker load
+[[ "$(docker image inspect --format '{{.Id}}' "agql-api:$revision")" == "$(cat image-id.txt)" ]]
+cd /srv/agql/AgQL
+git status --short
+git diff --quiet && git diff --cached --quiet || { echo "Preserve tracked work before switching" >&2; exit 1; }
+git fetch origin "$revision"
+git switch --detach "$revision"
 ./deploy/deploy.sh
+REMOTE
 ```
 
-The command pulls the image tagged with the checkout's full commit SHA; it never
-compiles source on the server. A missing or inaccessible image fails before any
-container is replaced. Existing manual `--seed` behavior is preserved. To select an
-immutable digest from the workflow summary, use:
+Check the host worktree status before executing the remote block's checkout;
+preserve any in-progress work. The script's normal image selection is
+`agql-api:<checkout-sha>`. It inspects the local image, checks its revision label
+and Linux amd64 platform, then resolves the tag to an immutable image content ID
+before Compose starts. It never pulls the API or compiles source on the host.
+A missing image, wrong revision or unsupported platform fails before replacement.
+The digest-pinned PostgreSQL dependency still pulls normally.
+
+For an explicit loaded content ID, use:
 
 ```sh
-AGQL_IMAGE=ghcr.io/unlikeotherai/agql@sha256:<published-digest> ./deploy/deploy.sh
+AGQL_IMAGE=sha256:<loaded-image-id> ./deploy/deploy.sh
 ```
 
-For manual recovery, select a previously published digest and its matching checkout
-after checking schema compatibility. Deployments do not automatically roll the
-database or containers back. Commit-tagged images must remain available for recovery.
+For manual recovery, load a retained archive and select its matching checkout after
+checking schema compatibility. Deployments do not automatically roll the database
+or containers back. Existing manual `--seed` behavior is preserved.
 
 Normal deployment provisions the catalog's PostgreSQL schema before the API can
 become ready. The script waits for `/ready` and then sends an authenticated MCP
@@ -129,7 +163,7 @@ data-migration mechanism.
 For direct Compose commands below, first select the checkout image:
 
 ```sh
-export AGQL_IMAGE="ghcr.io/unlikeotherai/agql:$(git rev-parse HEAD)"
+export AGQL_IMAGE="$(docker image inspect --format '{{.Id}}' "agql-api:$(git rev-parse HEAD)")"
 ```
 
 ## Verification
