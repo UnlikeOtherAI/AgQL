@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-for (const scenario of ['normal', 'seed', 'missing-image']) {
+for (const scenario of ['normal', 'seed', 'missing-image', 'wrong-revision', 'wrong-platform']) {
   test(`manual deploy with published image: ${scenario}`, async () => {
     const dir = await mkdtemp(join(process.cwd(), '.deploy-test-'));
     try {
@@ -18,10 +18,16 @@ set -euo pipefail
 export TRACE="$PWD/trace"
 export AGQL_IMAGE='ghcr.io/unlikeotherai/agql@sha256:${'a'.repeat(64)}'
 export SCENARIO='${scenario}'
+git() { echo ${'b'.repeat(40)}; }
+export -f git
 docker() {
   echo "$*" >> "$TRACE"
   case "$*" in
     *'pull agql-api') [ "$SCENARIO" != missing-image ]; return ;;
+    *'image inspect --format '*org.opencontainers.image.revision*)
+      if [ "$SCENARIO" = wrong-revision ]; then echo wrong; else echo ${'b'.repeat(40)}; fi ;;
+    *'image inspect --format '*'.Os'* )
+      if [ "$SCENARIO" = wrong-platform ]; then echo linux/arm64; else echo linux/amd64; fi ;;
     *'ps -q agql-api') echo test-container ;;
     'inspect '*) echo healthy ;;
     *'exec -T agql-api node -') cat >/dev/null ;;
@@ -34,10 +40,11 @@ bash deploy/deploy.sh ${scenario === 'seed' ? '--seed' : ''}
       const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
       const result = spawnSync(bash, ['harness.sh'], { cwd: dir, encoding: 'utf8', timeout: 10000 });
       const trace = await readFile(join(dir, 'trace'), 'utf8');
-      assert.equal(result.status, scenario === 'missing-image' ? 1 : 0, result.stderr);
+      const rejected = ['missing-image', 'wrong-revision', 'wrong-platform'].includes(scenario);
+      assert.equal(result.status, rejected ? 1 : 0, result.stderr);
       assert.doesNotMatch(trace, / build /);
       assert.match(trace, /pull agql-api/);
-      if (scenario === 'missing-image') {
+      if (rejected) {
         assert.doesNotMatch(trace, /up -d/);
       } else {
         assert.match(trace, /up -d --no-build --pull never/);

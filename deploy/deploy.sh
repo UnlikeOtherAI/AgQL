@@ -88,8 +88,8 @@ done < <(required_env_names)
 cd "${repo_dir}"
 # Manual deployments select the checked-out commit, never a mutable latest tag.
 # An explicit digest/reference supports operators deploying a previously published release.
+revision="$(git rev-parse --verify HEAD)"
 if [[ -z "${AGQL_IMAGE:-}" ]]; then
-  revision="$(git rev-parse --verify HEAD)"
   export AGQL_IMAGE="ghcr.io/unlikeotherai/agql:${revision}"
 fi
 compose=(docker compose --env-file "${env_file}" -f "${compose_file}")
@@ -99,6 +99,10 @@ echo "Pulling the digest-pinned PostgreSQL image..."
 
 echo "Pulling the published AgQL API image..."
 "${compose[@]}" pull agql-api
+image_revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$AGQL_IMAGE")"
+[[ "$image_revision" == "$revision" ]] || { echo "AgQL image revision does not match this checkout" >&2; exit 1; }
+image_platform="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$AGQL_IMAGE")"
+[[ "$image_platform" == linux/amd64 ]] || { echo "AgQL image must target linux/amd64" >&2; exit 1; }
 
 echo "Starting AgQL..."
 "${compose[@]}" up -d --no-build --pull never
